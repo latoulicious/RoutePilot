@@ -6,10 +6,18 @@
     "dev": "bun run --watch src/index.ts"
   },
   "dependencies": {
-    "elysia": "latest"
+    "@electric-sql/pglite": "^0.3.2",
+    "dotenv": "^16.5.0",
+    "drizzle-orm": "^0.44.1",
+    "elysia": "latest",
+    "pg": "^8.16.0",
+    "zod": "^3.25.46"
   },
   "devDependencies": {
-    "bun-types": "latest"
+    "@types/pg": "^8.15.4",
+    "bun-types": "latest",
+    "drizzle-kit": "^0.31.1",
+    "tsx": "^4.19.4"
   },
   "module": "src/index.js"
 }
