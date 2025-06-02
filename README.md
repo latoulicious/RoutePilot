@@ -1,8 +1,6 @@
 # RoutePilot
 
-![RoutePilot](https://media.discordapp.net/attachments/1378031194356060280/1378951037204955269/file_0000000051fc61f889b3bb7e9825c4c1.png?ex=683e77ba&is=683d263a&hm=ecb259080d0fe2fa4d2c3547e15dd95ec22139094141c16a4e571a4c86437fe3&=&format=webp&quality=lossless&width=1200&height=600)
-
-Blazing-fast, dynamic routing management for microservices and frontend applications.
+![RoutePilot](https://cdn.discordapp.com/attachments/1378031194356060280/1379069236185534606/yyy.png?ex=683ee5cf&is=683d944f&hm=606ea9dac3ce52e090aeccce11567b12387eb6d44a5726a6bc3de2153c9ab912&)
 
 ## Overview
 
