@@ -44,6 +44,11 @@ func NewRouter(config RouterConfig) *mux.Router {
 		securityChain.Then(http.HandlerFunc(flagHandler.EvaluateFlag))).
 		Methods("GET")
 
+	// Conversion tracking endpoint (POST /v1/experiments/conversions)
+	v1.Handle("/experiments/conversions", 
+		securityChain.Then(http.HandlerFunc(flagHandler.TrackConversion))).
+		Methods("POST")
+
 	// Health check endpoint (no authentication required)
 	router.HandleFunc("/health", healthCheckHandler).Methods("GET")
 
@@ -77,6 +82,11 @@ func NewTestRouter(evaluator flags.Evaluator, outboxRepo ports.OutboxRepository)
 	v1.Handle("/flags/{key}/eval", 
 		testAuthMiddleware(http.HandlerFunc(flagHandler.EvaluateFlag))).
 		Methods("GET")
+
+	// Conversion tracking endpoint with test middleware
+	v1.Handle("/experiments/conversions", 
+		testAuthMiddleware(http.HandlerFunc(flagHandler.TrackConversion))).
+		Methods("POST")
 
 	// Health check endpoint
 	router.HandleFunc("/health", healthCheckHandler).Methods("GET")

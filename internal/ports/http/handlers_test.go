@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -295,7 +296,310 @@ func TestFlagHandler_EvaluateFlag_Timeout(t *testing.T) {
 	}
 }
 
+func TestFlagHandler_TrackConversion(t *testing.T) {
+	tests := []struct {
+		name           string
+		requestBody    interface{}
+		expectedStatus int
+		expectError    bool
+		expectedErrorCode string
+	}{
+		{
+			name: "successful conversion tracking",
+			requestBody: ConversionRequest{
+				ExperimentKey: "exp_001",
+				SubjectID:     "user123",
+				ConversionKey: "purchase",
+				Value:         floatPtr(29.99),
+				Properties: map[string]interface{}{
+					"product_id": "prod_123",
+					"category":   "electronics",
+				},
+			},
+			expectedStatus: http.StatusCreated,
+			expectError:    false,
+		},
+		{
+			name: "successful conversion tracking without optional fields",
+			requestBody: ConversionRequest{
+				ExperimentKey: "exp_002",
+				SubjectID:     "user456",
+				ConversionKey: "signup",
+			},
+			expectedStatus: http.StatusCreated,
+			expectError:    false,
+		},
+		{
+			name: "missing experiment_key",
+			requestBody: ConversionRequest{
+				SubjectID:     "user123",
+				ConversionKey: "purchase",
+			},
+			expectedStatus:    http.StatusBadRequest,
+			expectError:       true,
+			expectedErrorCode: "MISSING_EXPERIMENT_KEY",
+		},
+		{
+			name: "missing subject_id",
+			requestBody: ConversionRequest{
+				ExperimentKey: "exp_001",
+				ConversionKey: "purchase",
+			},
+			expectedStatus:    http.StatusBadRequest,
+			expectError:       true,
+			expectedErrorCode: "MISSING_SUBJECT_ID",
+		},
+		{
+			name: "missing conversion_key",
+			requestBody: ConversionRequest{
+				ExperimentKey: "exp_001",
+				SubjectID:     "user123",
+			},
+			expectedStatus:    http.StatusBadRequest,
+			expectError:       true,
+			expectedErrorCode: "MISSING_CONVERSION_KEY",
+		},
+		{
+			name: "invalid experiment_key format",
+			requestBody: ConversionRequest{
+				ExperimentKey: "invalid-exp!",
+				SubjectID:     "user123",
+				ConversionKey: "purchase",
+			},
+			expectedStatus:    http.StatusBadRequest,
+			expectError:       true,
+			expectedErrorCode: "INVALID_EXPERIMENT_KEY",
+		},
+		{
+			name: "invalid conversion_key format",
+			requestBody: ConversionRequest{
+				ExperimentKey: "exp_001",
+				SubjectID:     "user123",
+				ConversionKey: "invalid-conversion!",
+			},
+			expectedStatus:    http.StatusBadRequest,
+			expectError:       true,
+			expectedErrorCode: "INVALID_CONVERSION_KEY",
+		},
+		{
+			name: "experiment_key too long",
+			requestBody: ConversionRequest{
+				ExperimentKey: string(make([]byte, 256)), // 256 characters
+				SubjectID:     "user123",
+				ConversionKey: "purchase",
+			},
+			expectedStatus:    http.StatusBadRequest,
+			expectError:       true,
+			expectedErrorCode: "INVALID_EXPERIMENT_KEY",
+		},
+		{
+			name: "subject_id too long",
+			requestBody: ConversionRequest{
+				ExperimentKey: "exp_001",
+				SubjectID:     string(make([]byte, 256)), // 256 characters
+				ConversionKey: "purchase",
+			},
+			expectedStatus:    http.StatusBadRequest,
+			expectError:       true,
+			expectedErrorCode: "INVALID_SUBJECT_ID",
+		},
+		{
+			name: "conversion_key too long",
+			requestBody: ConversionRequest{
+				ExperimentKey: "exp_001",
+				SubjectID:     "user123",
+				ConversionKey: string(make([]byte, 256)), // 256 characters
+			},
+			expectedStatus:    http.StatusBadRequest,
+			expectError:       true,
+			expectedErrorCode: "INVALID_CONVERSION_KEY",
+		},
+		{
+			name:           "invalid JSON",
+			requestBody:    "invalid json",
+			expectedStatus: http.StatusBadRequest,
+			expectError:    true,
+			expectedErrorCode: "INVALID_JSON",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create mock dependencies
+			mockEval := &mockEvaluator{}
+			mockOutbox := &mockOutboxRepo{}
+
+			// Create handler
+			handler := NewFlagHandler(mockEval, mockOutbox)
+
+			// Create request body
+			var reqBody []byte
+			var err error
+			if str, ok := tt.requestBody.(string); ok {
+				reqBody = []byte(str)
+			} else {
+				reqBody, err = json.Marshal(tt.requestBody)
+				if err != nil {
+					t.Fatalf("Failed to marshal request body: %v", err)
+				}
+			}
+
+			// Create request
+			req := httptest.NewRequest("POST", "/v1/experiments/conversions", 
+				bytes.NewReader(reqBody))
+			req.Header.Set("Content-Type", "application/json")
+
+			// Add auth context to request
+			tenantID := uuid.New()
+			authCtx := &middleware.AuthContext{
+				TenantID: tenantID,
+				APIKeyID: uuid.New(),
+			}
+			ctx := context.WithValue(req.Context(), "auth", authCtx)
+			req = req.WithContext(ctx)
+
+			// Create response recorder
+			rr := httptest.NewRecorder()
+
+			// Call handler
+			handler.TrackConversion(rr, req)
+
+			// Check status code
+			if rr.Code != tt.expectedStatus {
+				t.Errorf("Expected status %d, got %d", tt.expectedStatus, rr.Code)
+			}
+
+			// Check response
+			if tt.expectError {
+				var errorResp ErrorResponse
+				if err := json.NewDecoder(rr.Body).Decode(&errorResp); err != nil {
+					t.Errorf("Failed to decode error response: %v", err)
+				}
+				if errorResp.Error.Code != tt.expectedErrorCode {
+					t.Errorf("Expected error code %s, got %s", tt.expectedErrorCode, errorResp.Error.Code)
+				}
+			} else {
+				var response ConversionResponse
+				if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
+					t.Errorf("Failed to decode response: %v", err)
+				}
+
+				// Check response fields
+				if response.ConversionID == "" {
+					t.Error("Expected conversion_id in response")
+				}
+				if response.Status != "accepted" {
+					t.Errorf("Expected status 'accepted', got %s", response.Status)
+				}
+
+				// Verify UUID format
+				if _, err := uuid.Parse(response.ConversionID); err != nil {
+					t.Errorf("Expected valid UUID for conversion_id, got %s", response.ConversionID)
+				}
+
+				// Verify outbox event was published (with some delay for goroutine)
+				time.Sleep(10 * time.Millisecond)
+				if len(mockOutbox.events) != 1 {
+					t.Errorf("Expected 1 outbox event, got %d", len(mockOutbox.events))
+				} else {
+					event := mockOutbox.events[0]
+					if event.EventType != "experiment_conversion" {
+						t.Errorf("Expected event type 'experiment_conversion', got %s", event.EventType)
+					}
+					if event.TenantID != tenantID {
+						t.Errorf("Expected tenant ID %s, got %s", tenantID, event.TenantID)
+					}
+
+					// Verify payload structure
+					var payload map[string]interface{}
+					if err := json.Unmarshal(event.Payload, &payload); err != nil {
+						t.Errorf("Failed to unmarshal event payload: %v", err)
+					} else {
+						// Check required fields in payload
+						if payload["conversion_id"] == "" {
+							t.Error("Expected conversion_id in event payload")
+						}
+						if payload["experiment_key"] == "" {
+							t.Error("Expected experiment_key in event payload")
+						}
+						if payload["subject_id"] == "" {
+							t.Error("Expected subject_id in event payload")
+						}
+						if payload["conversion_key"] == "" {
+							t.Error("Expected conversion_key in event payload")
+						}
+						if payload["timestamp"] == "" {
+							t.Error("Expected timestamp in event payload")
+						}
+
+						// Check optional fields if present in request
+						if convReq, ok := tt.requestBody.(ConversionRequest); ok {
+							if convReq.Value != nil {
+								if payload["value"] == nil {
+									t.Error("Expected value in event payload")
+								}
+							}
+							if convReq.Properties != nil && len(convReq.Properties) > 0 {
+								if payload["properties"] == nil {
+									t.Error("Expected properties in event payload")
+								}
+							}
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestFlagHandler_TrackConversion_NoAuthContext(t *testing.T) {
+	// Create mock dependencies
+	mockEval := &mockEvaluator{}
+	mockOutbox := &mockOutboxRepo{}
+
+	// Create handler
+	handler := NewFlagHandler(mockEval, mockOutbox)
+
+	// Create request body
+	reqBody := ConversionRequest{
+		ExperimentKey: "exp_001",
+		SubjectID:     "user123",
+		ConversionKey: "purchase",
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+
+	// Create request without auth context
+	req := httptest.NewRequest("POST", "/v1/experiments/conversions", 
+		bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+
+	// Create response recorder
+	rr := httptest.NewRecorder()
+
+	// Call handler
+	handler.TrackConversion(rr, req)
+
+	// Should return authentication error
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("Expected status %d, got %d", http.StatusUnauthorized, rr.Code)
+	}
+
+	var errorResp ErrorResponse
+	if err := json.NewDecoder(rr.Body).Decode(&errorResp); err != nil {
+		t.Errorf("Failed to decode error response: %v", err)
+	}
+
+	if errorResp.Error.Code != "AUTHENTICATION_REQUIRED" {
+		t.Errorf("Expected error code 'AUTHENTICATION_REQUIRED', got %s", errorResp.Error.Code)
+	}
+}
+
 // Helper function to create string pointers
 func stringPtr(s string) *string {
 	return &s
+}
+
+// Helper function to create float64 pointers
+func floatPtr(f float64) *float64 {
+	return &f
 }

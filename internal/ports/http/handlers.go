@@ -195,6 +195,137 @@ func (h *FlagHandler) writeJSONResponse(w http.ResponseWriter, status int, data 
 	}
 }
 
+// ConversionRequest represents the request body for conversion tracking
+type ConversionRequest struct {
+	ExperimentKey string                 `json:"experiment_key" validate:"required"`
+	SubjectID     string                 `json:"subject_id" validate:"required"`
+	ConversionKey string                 `json:"conversion_key" validate:"required"`
+	Value         *float64               `json:"value,omitempty"`
+	Properties    map[string]interface{} `json:"properties,omitempty"`
+}
+
+// ConversionResponse represents the response for conversion tracking
+type ConversionResponse struct {
+	ConversionID string `json:"conversion_id"`
+	Status       string `json:"status"`
+}
+
+// TrackConversion handles POST /v1/experiments/conversions
+func (h *FlagHandler) TrackConversion(w http.ResponseWriter, r *http.Request) {
+
+	// Get authentication context
+	authCtx, ok := middleware.GetAuthContext(r)
+	if !ok {
+		h.writeErrorResponse(w, http.StatusUnauthorized, "AUTHENTICATION_REQUIRED", "Authentication context not found")
+		return
+	}
+
+	// Parse request body
+	var conversionReq ConversionRequest
+	if err := json.NewDecoder(r.Body).Decode(&conversionReq); err != nil {
+		h.writeErrorResponse(w, http.StatusBadRequest, "INVALID_JSON", "Invalid JSON in request body")
+		return
+	}
+
+	// Validate required fields
+	if conversionReq.ExperimentKey == "" {
+		h.writeErrorResponse(w, http.StatusBadRequest, "MISSING_EXPERIMENT_KEY", "experiment_key is required")
+		return
+	}
+	if conversionReq.SubjectID == "" {
+		h.writeErrorResponse(w, http.StatusBadRequest, "MISSING_SUBJECT_ID", "subject_id is required")
+		return
+	}
+	if conversionReq.ConversionKey == "" {
+		h.writeErrorResponse(w, http.StatusBadRequest, "MISSING_CONVERSION_KEY", "conversion_key is required")
+		return
+	}
+
+	// Validate field formats and lengths
+	if len(conversionReq.ExperimentKey) > 255 {
+		h.writeErrorResponse(w, http.StatusBadRequest, "INVALID_EXPERIMENT_KEY", "experiment_key must be 255 characters or less")
+		return
+	}
+	if len(conversionReq.SubjectID) > 255 {
+		h.writeErrorResponse(w, http.StatusBadRequest, "INVALID_SUBJECT_ID", "subject_id must be 255 characters or less")
+		return
+	}
+	if len(conversionReq.ConversionKey) > 255 {
+		h.writeErrorResponse(w, http.StatusBadRequest, "INVALID_CONVERSION_KEY", "conversion_key must be 255 characters or less")
+		return
+	}
+
+	// Validate experiment key format (alphanumeric with underscores)
+	if !middleware.ValidateFlagKey(conversionReq.ExperimentKey) {
+		h.writeErrorResponse(w, http.StatusBadRequest, "INVALID_EXPERIMENT_KEY", "experiment_key must be alphanumeric with underscores")
+		return
+	}
+
+	// Validate conversion key format (alphanumeric with underscores)
+	if !middleware.ValidateFlagKey(conversionReq.ConversionKey) {
+		h.writeErrorResponse(w, http.StatusBadRequest, "INVALID_CONVERSION_KEY", "conversion_key must be alphanumeric with underscores")
+		return
+	}
+
+	// Generate conversion ID
+	conversionID := uuid.New()
+
+	// Publish conversion event to outbox (async, don't block response)
+	go h.publishConversionEvent(context.Background(), authCtx.TenantID, conversionID, &conversionReq)
+
+	// Create response
+	response := ConversionResponse{
+		ConversionID: conversionID.String(),
+		Status:       "accepted",
+	}
+
+	// Write successful response
+	h.writeJSONResponse(w, http.StatusCreated, response)
+}
+
+// publishConversionEvent publishes a conversion event to the outbox
+func (h *FlagHandler) publishConversionEvent(ctx context.Context, tenantID uuid.UUID, conversionID uuid.UUID, req *ConversionRequest) {
+	// Create conversion event payload
+	conversionPayload := map[string]interface{}{
+		"conversion_id":   conversionID.String(),
+		"experiment_key":  req.ExperimentKey,
+		"subject_id":      req.SubjectID,
+		"conversion_key":  req.ConversionKey,
+		"timestamp":       time.Now().UTC().Format(time.RFC3339),
+	}
+
+	// Add optional fields if present
+	if req.Value != nil {
+		conversionPayload["value"] = *req.Value
+	}
+	if req.Properties != nil && len(req.Properties) > 0 {
+		conversionPayload["properties"] = req.Properties
+	}
+
+	// Marshal payload to JSON
+	payloadBytes, err := json.Marshal(conversionPayload)
+	if err != nil {
+		// Log error in production
+		return
+	}
+
+	// Create outbox event
+	event := &flags.OutboxEvent{
+		ID:        uuid.New(),
+		TenantID:  tenantID,
+		EventType: "experiment_conversion",
+		Payload:   json.RawMessage(payloadBytes),
+		CreatedAt: time.Now(),
+	}
+
+	// Add event to outbox (with timeout)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	
+	_ = h.outboxRepo.AddEvent(ctx, event)
+	// In production, you'd want to log errors here
+}
+
 // writeErrorResponse writes a standardized error response
 func (h *FlagHandler) writeErrorResponse(w http.ResponseWriter, status int, code, message string) {
 	response := ErrorResponse{
