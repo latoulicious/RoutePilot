@@ -20,3 +20,8 @@ RETURNING *;
 SELECT * FROM flags 
 WHERE tenant_id = $1 
 ORDER BY created_at DESC;
+
+-- name: GetFlagByID :one
+SELECT id, tenant_id, key, description, type, enabled, salt, created_at, updated_at
+FROM flags 
+WHERE id = $1;

@@ -50,6 +50,29 @@ func (q *Queries) CreateFlag(ctx context.Context, arg CreateFlagParams) (Flag, e
 	return i, err
 }
 
+const getFlagByID = `-- name: GetFlagByID :one
+SELECT id, tenant_id, key, description, type, enabled, salt, created_at, updated_at
+FROM flags 
+WHERE id = $1
+`
+
+func (q *Queries) GetFlagByID(ctx context.Context, id pgtype.UUID) (Flag, error) {
+	row := q.db.QueryRow(ctx, getFlagByID, id)
+	var i Flag
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Key,
+		&i.Description,
+		&i.Type,
+		&i.Enabled,
+		&i.Salt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getFlagByTenantKey = `-- name: GetFlagByTenantKey :one
 SELECT id, tenant_id, key, description, type, enabled, salt, created_at, updated_at
 FROM flags 

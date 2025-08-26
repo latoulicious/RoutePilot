@@ -27,6 +27,7 @@ type Querier interface {
 	GetAssignment(ctx context.Context, arg GetAssignmentParams) (FlagAssignment, error)
 	GetExperimentByFlagID(ctx context.Context, flagID pgtype.UUID) (Experiment, error)
 	GetExperimentByTenantKey(ctx context.Context, arg GetExperimentByTenantKeyParams) (Experiment, error)
+	GetFlagByID(ctx context.Context, id pgtype.UUID) (Flag, error)
 	GetFlagByTenantKey(ctx context.Context, arg GetFlagByTenantKeyParams) (Flag, error)
 	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
 	GetRulesByFlag(ctx context.Context, flagID pgtype.UUID) ([]FlagRule, error)
