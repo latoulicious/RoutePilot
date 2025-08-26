@@ -59,12 +59,12 @@ type Assignment struct {
 
 // Experiment represents an A/B test experiment
 type Experiment struct {
-	ID       uuid.UUID        `json:"id"`
-	TenantID uuid.UUID        `json:"tenant_id"`
-	Key      string           `json:"key"`
-	FlagID   uuid.UUID        `json:"flag_id"`
-	Status   ExperimentStatus `json:"status"`
-	Traffic  int              `json:"traffic"` // 0-100
+	ID       uuid.UUID            `json:"id"`
+	TenantID uuid.UUID            `json:"tenant_id"`
+	Key      string               `json:"key"`
+	FlagID   uuid.UUID            `json:"flag_id"`
+	Status   ExperimentStatus     `json:"status"`
+	Traffic  int                  `json:"traffic"` // 0-100
 	Variants []*ExperimentVariant `json:"variants"`
 }
 
@@ -101,7 +101,8 @@ type APIKey struct {
 type OutboxEvent struct {
 	ID          uuid.UUID       `json:"id"`
 	TenantID    uuid.UUID       `json:"tenant_id"`
-	EventType   string          `json:"event_type"`
+	Topic       string          `json:"topic"`
+	Key         *string         `json:"key,omitempty"`
 	Payload     json.RawMessage `json:"payload"`
 	PublishedAt *time.Time      `json:"published_at"`
 	CreatedAt   time.Time       `json:"created_at"`

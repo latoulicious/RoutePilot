@@ -30,3 +30,8 @@ func NewConnection(ctx context.Context, databaseURL string) (*pgxpool.Pool, erro
 
 	return pool, nil
 }
+
+// Connect creates a new PostgreSQL connection pool with default context
+func Connect(databaseURL string) (*pgxpool.Pool, error) {
+	return NewConnection(context.Background(), databaseURL)
+}
