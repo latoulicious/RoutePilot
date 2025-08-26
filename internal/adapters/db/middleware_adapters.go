@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -48,7 +47,7 @@ func (r *APIKeyRepositoryAdapter) GetAPIKeyByID(ctx context.Context, keyID uuid.
 
 	// Convert tenant ID
 	if dbKey.TenantID.Valid {
-		tenantUUID, err := uuid.Parse(dbKey.TenantID.Bytes.String())
+		tenantUUID, err := uuid.FromBytes(dbKey.TenantID.Bytes[:])
 		if err == nil {
 			apiKey.TenantID = tenantUUID
 		}
