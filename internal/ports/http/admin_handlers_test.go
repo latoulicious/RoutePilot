@@ -84,6 +84,20 @@ func (m *mockFlagRepo) UpdateFlag(ctx context.Context, flagID uuid.UUID, updates
 	return fmt.Errorf("flag not found")
 }
 
+func (m *mockFlagRepo) GetFlagByID(ctx context.Context, flagID uuid.UUID) (*flags.Flag, error) {
+	if m.getError != nil {
+		return nil, m.getError
+	}
+	
+	// For testing, we'll just return a mock flag
+	for _, flag := range m.flags {
+		if flag.ID == flagID {
+			return flag, nil
+		}
+	}
+	return nil, fmt.Errorf("flag not found")
+}
+
 func (m *mockFlagRepo) DeleteFlag(ctx context.Context, flagID uuid.UUID) error {
 	return fmt.Errorf("not implemented")
 }

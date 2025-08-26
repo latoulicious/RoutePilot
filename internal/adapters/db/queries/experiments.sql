@@ -21,3 +21,7 @@ RETURNING *;
 SELECT * FROM experiments 
 WHERE tenant_id = $1 
 ORDER BY created_at DESC;
+
+-- name: GetExperimentByID :one
+SELECT * FROM experiments 
+WHERE id = $1;

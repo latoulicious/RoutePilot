@@ -26,6 +26,7 @@ type Querier interface {
 	GetAPIKeyByTenant(ctx context.Context, arg GetAPIKeyByTenantParams) (ApiKey, error)
 	GetAssignment(ctx context.Context, arg GetAssignmentParams) (FlagAssignment, error)
 	GetExperimentByFlagID(ctx context.Context, flagID pgtype.UUID) (Experiment, error)
+	GetExperimentByID(ctx context.Context, id pgtype.UUID) (Experiment, error)
 	GetExperimentByTenantKey(ctx context.Context, arg GetExperimentByTenantKeyParams) (Experiment, error)
 	GetFlagByID(ctx context.Context, id pgtype.UUID) (Flag, error)
 	GetFlagByTenantKey(ctx context.Context, arg GetFlagByTenantKeyParams) (Flag, error)

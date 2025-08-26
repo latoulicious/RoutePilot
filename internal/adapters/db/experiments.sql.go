@@ -66,6 +66,27 @@ func (q *Queries) GetExperimentByFlagID(ctx context.Context, flagID pgtype.UUID)
 	return i, err
 }
 
+const getExperimentByID = `-- name: GetExperimentByID :one
+SELECT id, tenant_id, key, flag_id, status, traffic, created_at, updated_at FROM experiments 
+WHERE id = $1
+`
+
+func (q *Queries) GetExperimentByID(ctx context.Context, id pgtype.UUID) (Experiment, error) {
+	row := q.db.QueryRow(ctx, getExperimentByID, id)
+	var i Experiment
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Key,
+		&i.FlagID,
+		&i.Status,
+		&i.Traffic,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getExperimentByTenantKey = `-- name: GetExperimentByTenantKey :one
 SELECT id, tenant_id, key, flag_id, status, traffic, created_at, updated_at FROM experiments 
 WHERE tenant_id = $1 AND key = $2

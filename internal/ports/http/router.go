@@ -27,6 +27,7 @@ type RouterConfig struct {
 	OutboxRepo      ports.OutboxRepository
 	FlagRepo        ports.FlagRepository
 	FlagRuleRepo    FlagRuleRepository
+	ExperimentRepo  ports.ExperimentRepository
 	Cache           CacheInvalidator
 	APIKeyRepo      middleware.APIKeyRepository
 	IdempotencyRepo middleware.IdempotencyRepository
@@ -41,6 +42,7 @@ func NewRouter(config RouterConfig) *mux.Router {
 	// Create handlers
 	flagHandler := NewFlagHandler(config.Evaluator, config.OutboxRepo)
 	adminHandler := NewAdminHandler(config.FlagRepo, config.FlagRuleRepo, config.Cache)
+	experimentHandler := NewExperimentHandler(config.ExperimentRepo, config.FlagRepo, config.Cache)
 
 	// Create middleware chains
 	securityChain := middleware.SecurityMiddlewareChain(
@@ -77,6 +79,22 @@ func NewRouter(config RouterConfig) *mux.Router {
 	// Update flag endpoint (PATCH /v1/flags/{key})
 	v1.Handle("/flags/{key}", 
 		securityChain.Then(http.HandlerFunc(adminHandler.UpdateFlag))).
+		Methods("PATCH")
+
+	// Experiment management endpoints
+	// Create experiment endpoint (POST /v1/experiments)
+	v1.Handle("/experiments", 
+		securityChain.Then(http.HandlerFunc(experimentHandler.CreateExperiment))).
+		Methods("POST")
+
+	// Create experiment variant endpoint (POST /v1/experiments/{key}/variants)
+	v1.Handle("/experiments/{key}/variants", 
+		securityChain.Then(http.HandlerFunc(experimentHandler.CreateVariant))).
+		Methods("POST")
+
+	// Update experiment endpoint (PATCH /v1/experiments/{key})
+	v1.Handle("/experiments/{key}", 
+		securityChain.Then(http.HandlerFunc(experimentHandler.UpdateExperiment))).
 		Methods("PATCH")
 
 	// Health check endpoint (no authentication required)
