@@ -26,13 +26,17 @@ type AssignmentRepositoryInterface interface {
 type FlagEvaluator struct {
 	flagRepo       FlagRepositoryInterface
 	assignmentRepo AssignmentRepositoryInterface
+	experimentRepo ExperimentRepositoryInterface
+	experimentEngine ExperimentEngine
 }
 
 // NewFlagEvaluator creates a new flag evaluator
-func NewFlagEvaluator(flagRepo FlagRepositoryInterface, assignmentRepo AssignmentRepositoryInterface) *FlagEvaluator {
+func NewFlagEvaluator(flagRepo FlagRepositoryInterface, assignmentRepo AssignmentRepositoryInterface, experimentRepo ExperimentRepositoryInterface, experimentEngine ExperimentEngine) *FlagEvaluator {
 	return &FlagEvaluator{
 		flagRepo:       flagRepo,
 		assignmentRepo: assignmentRepo,
+		experimentRepo: experimentRepo,
+		experimentEngine: experimentEngine,
 	}
 }
 
@@ -127,7 +131,31 @@ func (e *FlagEvaluator) EvaluateFlag(ctx context.Context, req EvaluationRequest)
 	// Persist assignment (best effort - don't fail evaluation if this fails)
 	_ = e.assignmentRepo.UpsertAssignment(ctx, assignment)
 
-	// Return successful evaluation result
+	// Check for experiments on this flag
+	experiment, err := e.experimentRepo.GetExperimentByFlagID(ctx, flag.ID)
+	if err == nil && experiment != nil {
+		// Process experiment
+		expResult, expErr := e.experimentEngine.ProcessExperiment(ctx, flag, assignment, experiment)
+		if expErr == nil && expResult != nil {
+			// Return experiment result with experiment metadata
+			result := &EvaluationResult{
+				FlagKey:       req.FlagKey,
+				Enabled:       true,
+				Value:         expResult.Value,
+				Bucket:        bucket,
+				ExperimentKey: &experiment.Key,
+			}
+			
+			if expResult.AssignedVariant != nil {
+				result.VariantName = &expResult.AssignedVariant.Name
+			}
+			
+			return result, nil
+		}
+		// If experiment processing fails, continue with normal flag evaluation
+	}
+
+	// Return successful evaluation result (no experiment or experiment failed)
 	result := &EvaluationResult{
 		FlagKey: req.FlagKey,
 		Enabled: true,

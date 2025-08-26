@@ -50,11 +50,45 @@ func (m *MockAssignmentRepository) UpsertAssignment(ctx context.Context, assignm
 	return args.Error(0)
 }
 
+type MockExperimentRepository struct {
+	mock.Mock
+}
+
+func (m *MockExperimentRepository) GetExperimentByFlagID(ctx context.Context, flagID uuid.UUID) (*Experiment, error) {
+	args := m.Called(ctx, flagID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*Experiment), args.Error(1)
+}
+
+func (m *MockExperimentRepository) GetExperimentVariants(ctx context.Context, experimentID uuid.UUID) ([]*ExperimentVariant, error) {
+	args := m.Called(ctx, experimentID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*ExperimentVariant), args.Error(1)
+}
+
+type MockExperimentEngine struct {
+	mock.Mock
+}
+
+func (m *MockExperimentEngine) ProcessExperiment(ctx context.Context, flag *Flag, assignment *Assignment, exp *Experiment) (*ExperimentResult, error) {
+	args := m.Called(ctx, flag, assignment, exp)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*ExperimentResult), args.Error(1)
+}
+
 func TestFlagEvaluator_EvaluateFlag_DisabledFlag(t *testing.T) {
 	// Setup
 	mockFlagRepo := new(MockFlagRepository)
 	mockAssignmentRepo := new(MockAssignmentRepository)
-	evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo)
+	mockExperimentRepo := new(MockExperimentRepository)
+	mockExperimentEngine := new(MockExperimentEngine)
+	evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo, mockExperimentRepo, mockExperimentEngine)
 
 	tenantID := uuid.New()
 	flagID := uuid.New()
@@ -70,6 +104,8 @@ func TestFlagEvaluator_EvaluateFlag_DisabledFlag(t *testing.T) {
 	}
 
 	mockFlagRepo.On("GetFlagByKey", mock.Anything, tenantID, "test-flag").Return(flag, nil)
+	// No experiment for this flag
+	mockExperimentRepo.On("GetExperimentByFlagID", mock.Anything, flagID).Return(nil, errors.New("no experiment"))
 
 	// Execute
 	req := EvaluationRequest{
@@ -95,7 +131,9 @@ func TestFlagEvaluator_EvaluateFlag_EnabledFlagWithRules(t *testing.T) {
 	// Setup
 	mockFlagRepo := new(MockFlagRepository)
 	mockAssignmentRepo := new(MockAssignmentRepository)
-	evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo)
+	mockExperimentRepo := new(MockExperimentRepository)
+	mockExperimentEngine := new(MockExperimentEngine)
+	evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo, mockExperimentRepo, mockExperimentEngine)
 
 	tenantID := uuid.New()
 	flagID := uuid.New()
@@ -156,7 +194,9 @@ func TestFlagEvaluator_EvaluateFlag_StickyAssignment(t *testing.T) {
 	// Setup
 	mockFlagRepo := new(MockFlagRepository)
 	mockAssignmentRepo := new(MockAssignmentRepository)
-	evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo)
+	mockExperimentRepo := new(MockExperimentRepository)
+	mockExperimentEngine := new(MockExperimentEngine)
+	evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo, mockExperimentRepo, mockExperimentEngine)
 
 	tenantID := uuid.New()
 	flagID := uuid.New()
@@ -207,7 +247,9 @@ func TestFlagEvaluator_EvaluateFlag_NoMatchingRules(t *testing.T) {
 	// Setup
 	mockFlagRepo := new(MockFlagRepository)
 	mockAssignmentRepo := new(MockAssignmentRepository)
-	evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo)
+	mockExperimentRepo := new(MockExperimentRepository)
+	mockExperimentEngine := new(MockExperimentEngine)
+	evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo, mockExperimentRepo, mockExperimentEngine)
 
 	tenantID := uuid.New()
 	flagID := uuid.New()
@@ -259,7 +301,9 @@ func TestFlagEvaluator_EvaluateFlag_SafeDefaultOnFlagNotFound(t *testing.T) {
 	// Setup
 	mockFlagRepo := new(MockFlagRepository)
 	mockAssignmentRepo := new(MockAssignmentRepository)
-	evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo)
+	mockExperimentRepo := new(MockExperimentRepository)
+	mockExperimentEngine := new(MockExperimentEngine)
+	evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo, mockExperimentRepo, mockExperimentEngine)
 
 	tenantID := uuid.New()
 
@@ -288,7 +332,9 @@ func TestFlagEvaluator_EvaluateFlag_SafeDefaultOnRulesFailure(t *testing.T) {
 	// Setup
 	mockFlagRepo := new(MockFlagRepository)
 	mockAssignmentRepo := new(MockAssignmentRepository)
-	evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo)
+	mockExperimentRepo := new(MockExperimentRepository)
+	mockExperimentEngine := new(MockExperimentEngine)
+	evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo, mockExperimentRepo, mockExperimentEngine)
 
 	tenantID := uuid.New()
 	flagID := uuid.New()
@@ -329,7 +375,9 @@ func TestFlagEvaluator_EvaluateFlag_RulePriorityOrdering(t *testing.T) {
 	// Setup
 	mockFlagRepo := new(MockFlagRepository)
 	mockAssignmentRepo := new(MockAssignmentRepository)
-	evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo)
+	mockExperimentRepo := new(MockExperimentRepository)
+	mockExperimentEngine := new(MockExperimentEngine)
+	evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo, mockExperimentRepo, mockExperimentEngine)
 
 	tenantID := uuid.New()
 	flagID := uuid.New()
@@ -395,7 +443,9 @@ func TestFlagEvaluator_EvaluateFlag_AssignmentPersistenceFailure(t *testing.T) {
 	// Setup
 	mockFlagRepo := new(MockFlagRepository)
 	mockAssignmentRepo := new(MockAssignmentRepository)
-	evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo)
+	mockExperimentRepo := new(MockExperimentRepository)
+	mockExperimentEngine := new(MockExperimentEngine)
+	evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo, mockExperimentRepo, mockExperimentEngine)
 
 	tenantID := uuid.New()
 	flagID := uuid.New()
@@ -449,7 +499,9 @@ func TestFlagEvaluator_EvaluateFlag_DeterministicBehavior(t *testing.T) {
 	// Test that the same subject gets the same result consistently (Requirement 1.1, 1.2)
 	mockFlagRepo := new(MockFlagRepository)
 	mockAssignmentRepo := new(MockAssignmentRepository)
-	evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo)
+	mockExperimentRepo := new(MockExperimentRepository)
+	mockExperimentEngine := new(MockExperimentEngine)
+	evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo, mockExperimentRepo, mockExperimentEngine)
 
 	tenantID := uuid.New()
 	flagID := uuid.New()
@@ -520,7 +572,9 @@ func TestFlagEvaluator_EvaluateFlag_MultipleRulesPriorityEvaluation(t *testing.T
 	// Test that rules are evaluated in priority order (Requirement 1.3)
 	mockFlagRepo := new(MockFlagRepository)
 	mockAssignmentRepo := new(MockAssignmentRepository)
-	evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo)
+	mockExperimentRepo := new(MockExperimentRepository)
+	mockExperimentEngine := new(MockExperimentEngine)
+	evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo, mockExperimentRepo, mockExperimentEngine)
 
 	tenantID := uuid.New()
 	flagID := uuid.New()
@@ -635,7 +689,9 @@ func TestFlagEvaluator_EvaluateFlag_SafeDefaultOnSystemFailure(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			mockFlagRepo := new(MockFlagRepository)
 			mockAssignmentRepo := new(MockAssignmentRepository)
-			evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo)
+			mockExperimentRepo := new(MockExperimentRepository)
+			mockExperimentEngine := new(MockExperimentEngine)
+			evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo, mockExperimentRepo, mockExperimentEngine)
 
 			tc.setupMocks(mockFlagRepo, mockAssignmentRepo)
 
@@ -663,7 +719,9 @@ func TestFlagEvaluator_EvaluateFlag_DisabledFlagBehavior(t *testing.T) {
 	// Test that disabled flags return false regardless of rules (Requirement 1.5)
 	mockFlagRepo := new(MockFlagRepository)
 	mockAssignmentRepo := new(MockAssignmentRepository)
-	evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo)
+	mockExperimentRepo := new(MockExperimentRepository)
+	mockExperimentEngine := new(MockExperimentEngine)
+	evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo, mockExperimentRepo, mockExperimentEngine)
 
 	tenantID := uuid.New()
 	flagID := uuid.New()
@@ -706,7 +764,9 @@ func TestFlagEvaluator_EvaluateFlag_JSONFlagType(t *testing.T) {
 	// Test JSON flag evaluation
 	mockFlagRepo := new(MockFlagRepository)
 	mockAssignmentRepo := new(MockAssignmentRepository)
-	evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo)
+	mockExperimentRepo := new(MockExperimentRepository)
+	mockExperimentEngine := new(MockExperimentEngine)
+	evaluator := NewFlagEvaluator(mockFlagRepo, mockAssignmentRepo, mockExperimentRepo, mockExperimentEngine)
 
 	tenantID := uuid.New()
 	flagID := uuid.New()
