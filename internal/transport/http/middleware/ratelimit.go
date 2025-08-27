@@ -1,11 +1,11 @@
 package middleware
 
 import (
-	"fmt"
-	"net/http"
-	"strings"
-	"sync"
-	"time"
+    "fmt"
+    "net/http"
+    "strings"
+    "sync"
+    "time"
 )
 
 // TokenBucket represents a token bucket for rate limiting
@@ -86,15 +86,17 @@ type RateLimitMiddleware struct {
 
 // NewRateLimitMiddleware creates a new rate limiting middleware
 func NewRateLimitMiddleware(config *RateLimitConfig) *RateLimitMiddleware {
-	if config == nil {
-		config = DefaultRateLimitConfig()
-	}
+    if config == nil {
+        config = DefaultRateLimitConfig()
+    }
 
 	return &RateLimitMiddleware{
 		config:  config,
 		buckets: make(map[string]*TokenBucket),
 	}
 }
+
+// Removed env loading; settings provided via app config
 
 // Middleware returns the HTTP middleware function
 func (m *RateLimitMiddleware) Middleware(next http.Handler) http.Handler {

@@ -90,10 +90,16 @@ func loadKafkaConfig() (*kafka.Config, error) {
 }
 
 func loadWorkerConfig() (*OutboxWorkerConfig, error) {
-	batchSize := getEnvInt("OUTBOX_BATCH_SIZE", 100)
-	pollInterval := getEnvDuration("OUTBOX_POLL_INTERVAL", 5*time.Second)
-	processTimeout := getEnvDuration("OUTBOX_PROCESS_TIMEOUT", 30*time.Second)
-	shutdownTimeout := getEnvDuration("OUTBOX_SHUTDOWN_TIMEOUT", 30*time.Second)
+    // Plan names: OUTBOX_BATCH, OUTBOX_TICK_MS
+    batchSize := getEnvInt("OUTBOX_BATCH", 0)
+    if batchSize == 0 { batchSize = getEnvInt("OUTBOX_BATCH_SIZE", 100) }
+
+    tickMS := getEnvInt("OUTBOX_TICK_MS", 0)
+    var pollInterval time.Duration
+    if tickMS > 0 { pollInterval = time.Duration(tickMS) * time.Millisecond } else { pollInterval = getEnvDuration("OUTBOX_POLL_INTERVAL", 250*time.Millisecond) }
+
+    processTimeout := getEnvDuration("OUTBOX_PROCESS_TIMEOUT", 30*time.Second)
+    shutdownTimeout := getEnvDuration("OUTBOX_SHUTDOWN_TIMEOUT", 30*time.Second)
 
 	return &OutboxWorkerConfig{
 		BatchSize:       batchSize,

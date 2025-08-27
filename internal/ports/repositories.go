@@ -12,6 +12,7 @@ type FlagRepository interface {
     GetFlagByKey(ctx context.Context, tenantID uuid.UUID, key string) (*flags.Flag, error)
     GetFlagByID(ctx context.Context, flagID uuid.UUID) (*flags.Flag, error)
     GetFlagRules(ctx context.Context, flagID uuid.UUID) ([]*flags.FlagRule, error)
+    ListFlagsByTenant(ctx context.Context, tenantID uuid.UUID) ([]*flags.Flag, error)
     CreateFlagRule(ctx context.Context, rule *flags.FlagRule) error
     CreateFlag(ctx context.Context, flag *flags.Flag) error
     UpdateFlag(ctx context.Context, flagID uuid.UUID, updates flags.FlagUpdates) error
@@ -26,12 +27,13 @@ type AssignmentRepository interface {
 
 // ExperimentRepository defines the interface for experiment data access
 type ExperimentRepository interface {
-	GetExperimentByFlagID(ctx context.Context, flagID uuid.UUID) (*flags.Experiment, error)
-	GetExperimentByTenantKey(ctx context.Context, tenantID uuid.UUID, key string) (*flags.Experiment, error)
-	GetExperimentVariants(ctx context.Context, experimentID uuid.UUID) ([]*flags.ExperimentVariant, error)
-	CreateExperiment(ctx context.Context, experiment *flags.Experiment) error
-	UpdateExperiment(ctx context.Context, experimentID uuid.UUID, status flags.ExperimentStatus) error
-	CreateExperimentVariant(ctx context.Context, variant *flags.ExperimentVariant) error
+    GetExperimentByFlagID(ctx context.Context, flagID uuid.UUID) (*flags.Experiment, error)
+    GetExperimentByTenantKey(ctx context.Context, tenantID uuid.UUID, key string) (*flags.Experiment, error)
+    GetExperimentVariants(ctx context.Context, experimentID uuid.UUID) ([]*flags.ExperimentVariant, error)
+    ListExperimentsByTenant(ctx context.Context, tenantID uuid.UUID) ([]*flags.Experiment, error)
+    CreateExperiment(ctx context.Context, experiment *flags.Experiment) error
+    UpdateExperiment(ctx context.Context, experimentID uuid.UUID, status flags.ExperimentStatus) error
+    CreateExperimentVariant(ctx context.Context, variant *flags.ExperimentVariant) error
 }
 
 // TenantRepository defines the interface for tenant data access

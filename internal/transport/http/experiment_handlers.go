@@ -28,6 +28,60 @@ func NewExperimentHandler(experimentRepo ports.ExperimentRepository, flagRepo po
     }
 }
 
+// ListExperimentsResponse item
+type ListExperimentsResponse struct {
+    ID      uuid.UUID                  `json:"id"`
+    Key     string                     `json:"key"`
+    FlagID  uuid.UUID                  `json:"flag_id"`
+    Status  flags.ExperimentStatus     `json:"status"`
+    Traffic int                        `json:"traffic"`
+}
+
+// ListExperiments handles GET /v1/experiments
+func (h *ExperimentHandler) ListExperiments(w http.ResponseWriter, r *http.Request) {
+    authCtx, ok := middleware.GetAuthContext(r)
+    if !ok {
+        h.writeErrorResponse(w, http.StatusUnauthorized, "AUTHENTICATION_REQUIRED", "Authentication context not found")
+        return
+    }
+    exps, err := h.experimentRepo.ListExperimentsByTenant(r.Context(), authCtx.TenantID)
+    if err != nil {
+        h.writeErrorResponse(w, http.StatusInternalServerError, "LIST_EXPERIMENTS_FAILED", "Failed to list experiments")
+        return
+    }
+    resp := make([]ListExperimentsResponse, 0, len(exps))
+    for _, e := range exps {
+        resp = append(resp, ListExperimentsResponse{ID: e.ID, Key: e.Key, FlagID: e.FlagID, Status: e.Status, Traffic: e.Traffic})
+    }
+    h.writeJSONResponse(w, http.StatusOK, resp)
+}
+
+// ListVariants handles GET /v1/experiments/{key}/variants
+func (h *ExperimentHandler) ListVariants(w http.ResponseWriter, r *http.Request) {
+    authCtx, ok := middleware.GetAuthContext(r)
+    if !ok {
+        h.writeErrorResponse(w, http.StatusUnauthorized, "AUTHENTICATION_REQUIRED", "Authentication context not found")
+        return
+    }
+    vars := mux.Vars(r)
+    experimentKey := vars["key"]
+    if experimentKey == "" || !middleware.ValidateFlagKey(experimentKey) {
+        h.writeErrorResponse(w, http.StatusBadRequest, "INVALID_EXPERIMENT_KEY", "Experiment key is required and must be valid")
+        return
+    }
+    exp, err := h.experimentRepo.GetExperimentByTenantKey(r.Context(), authCtx.TenantID, experimentKey)
+    if err != nil {
+        h.writeErrorResponse(w, http.StatusNotFound, "EXPERIMENT_NOT_FOUND", "Experiment not found")
+        return
+    }
+    variants, err := h.experimentRepo.GetExperimentVariants(r.Context(), exp.ID)
+    if err != nil {
+        h.writeErrorResponse(w, http.StatusInternalServerError, "LIST_VARIANTS_FAILED", "Failed to list variants")
+        return
+    }
+    h.writeJSONResponse(w, http.StatusOK, variants)
+}
+
 // CreateExperimentRequest represents the request body for experiment creation
 type CreateExperimentRequest struct {
     Key     string `json:"key" validate:"required"`
@@ -146,7 +200,7 @@ func (h *ExperimentHandler) CreateExperiment(w http.ResponseWriter, r *http.Requ
 type CreateVariantRequest struct {
     Name   string          `json:"name" validate:"required"`
     Weight int             `json:"weight" validate:"required"`
-    Value  json.RawMessage `json:"value" validate:"required"`
+    Config json.RawMessage `json:"config" validate:"required"`
 }
 
 // CreateVariantResponse represents the response for variant creation
@@ -198,14 +252,14 @@ func (h *ExperimentHandler) CreateVariant(w http.ResponseWriter, r *http.Request
         h.writeErrorResponse(w, http.StatusBadRequest, "INVALID_WEIGHT", "Weight must be between 0 and 100")
         return
     }
-    if len(createReq.Value) == 0 {
+    if len(createReq.Config) == 0 {
         h.writeErrorResponse(w, http.StatusBadRequest, "MISSING_VALUE", "value is required")
         return
     }
 
     // Validate value is valid JSON
     var valueTest interface{}
-    if err := json.Unmarshal(createReq.Value, &valueTest); err != nil {
+    if err := json.Unmarshal(createReq.Config, &valueTest); err != nil {
         h.writeErrorResponse(w, http.StatusBadRequest, "INVALID_VALUE", "value must be valid JSON")
         return
     }
@@ -233,7 +287,7 @@ func (h *ExperimentHandler) CreateVariant(w http.ResponseWriter, r *http.Request
         ExperimentID: experiment.ID,
         Name:         createReq.Name,
         Weight:       createReq.Weight,
-        Value:        createReq.Value,
+        Value:        createReq.Config,
     }
 
     // Create variant in database

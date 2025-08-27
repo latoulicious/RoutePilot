@@ -43,6 +43,7 @@ type Querier interface {
 	UpdateExperimentVariant(ctx context.Context, arg UpdateExperimentVariantParams) (ExperimentVariant, error)
 	UpdateFlag(ctx context.Context, arg UpdateFlagParams) (Flag, error)
 	UpdateFlagRule(ctx context.Context, arg UpdateFlagRuleParams) (FlagRule, error)
+	UpdateIdempotencyStatus(ctx context.Context, arg UpdateIdempotencyStatusParams) error
 	UpsertAssignment(ctx context.Context, arg UpsertAssignmentParams) (FlagAssignment, error)
 }
 

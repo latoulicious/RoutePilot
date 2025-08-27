@@ -14,7 +14,7 @@ import (
 
 // ExperimentRepositoryAdapter adapts the database repository for experiment operations
 type ExperimentRepositoryAdapter struct {
-	queries *Queries
+    queries *Queries
 }
 
 // Ensure ExperimentRepositoryAdapter implements the interface
@@ -79,6 +79,26 @@ func (r *ExperimentRepositoryAdapter) GetExperimentVariants(ctx context.Context,
 	}
 
 	return variants, nil
+}
+
+// ListExperimentsByTenant lists experiments for a tenant
+func (r *ExperimentRepositoryAdapter) ListExperimentsByTenant(ctx context.Context, tenantID uuid.UUID) ([]*flags.Experiment, error) {
+    var pgTenantID pgtype.UUID
+    if err := pgTenantID.Scan(tenantID); err != nil {
+        return nil, fmt.Errorf("invalid tenant ID: %v", err)
+    }
+
+    rows, err := r.queries.ListExperimentsByTenant(ctx, pgTenantID)
+    if err != nil {
+        return nil, fmt.Errorf("failed to list experiments: %v", err)
+    }
+    out := make([]*flags.Experiment, 0, len(rows))
+    for _, row := range rows {
+        exp, err := r.convertDBExperimentToCore(row)
+        if err != nil { return nil, err }
+        out = append(out, exp)
+    }
+    return out, nil
 }
 
 // CreateExperiment creates a new experiment

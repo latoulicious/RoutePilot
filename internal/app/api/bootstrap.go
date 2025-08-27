@@ -70,7 +70,15 @@ func BuildServer(ctx context.Context, cfg config.AppConfig) (*httpapi.Server, fu
         APIKeyRepo:      apiKeyRepo,
         IdempotencyRepo: idemRepo,
         Decryptor:       decryptor,
-        RateLimitConfig: middleware.DefaultRateLimitConfig(),
+        RateLimitConfig: &middleware.RateLimitConfig{
+            EvalRequests:       cfg.RateLimit.EvalRPS,
+            EvalBurst:          cfg.RateLimit.EvalBurst,
+            AdminRequests:      cfg.RateLimit.AdminRPS,
+            AdminBurst:         cfg.RateLimit.AdminBurst,
+            ConversionRequests: cfg.RateLimit.ConvRPS,
+            ConversionBurst:    cfg.RateLimit.ConvBurst,
+        },
+        EvalTimeout:     cfg.EvalTimeout,
     })
 
     // Server

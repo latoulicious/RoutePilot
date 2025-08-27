@@ -16,6 +16,7 @@ const idempotencyContextKey contextKey = "idempotency_key"
 type IdempotencyRepository interface {
     GetIdempotencyKey(ctx context.Context, tenantID, key uuid.UUID) (*IdempotencyKey, error)
     CreateIdempotencyKey(ctx context.Context, tenantID, key uuid.UUID, method string, pathHash []byte, status int32) (*IdempotencyKey, error)
+    UpdateIdempotencyStatus(ctx context.Context, tenantID, key uuid.UUID, status int32) error
 }
 
 // IdempotencyKey represents an idempotency key from the database
@@ -99,9 +100,15 @@ func (m *IdempotencyMiddleware) Middleware(next http.Handler) http.Handler {
             return
         }
 
-        // Add idempotency context to request
+        // Wrap ResponseWriter to capture status for update
         ctx := context.WithValue(r.Context(), idempotencyContextKey, idempotencyKey)
-        next.ServeHTTP(w, r.WithContext(ctx))
+        rw := &statusCapturingWriter{ResponseWriter: w, status: 0}
+        next.ServeHTTP(rw, r.WithContext(ctx))
+        // After handler runs, update stored status
+        if rw.status == 0 {
+            rw.status = http.StatusOK
+        }
+        _ = m.repo.UpdateIdempotencyStatus(r.Context(), authCtx.TenantID, idempotencyKey, int32(rw.status))
     })
 }
 
@@ -139,9 +146,16 @@ func GetIdempotencyKey(r *http.Request) (uuid.UUID, bool) {
 
 // UpdateIdempotencyStatus updates the status of an idempotency key after processing
 func (m *IdempotencyMiddleware) UpdateIdempotencyStatus(ctx context.Context, tenantID, key uuid.UUID, status int) error {
-    // This would typically be called by the handler after successful processing
-    // For now, we'll leave this as a placeholder since we don't have an update query
-    // In a real implementation, you'd add an UPDATE query to the SQL files
-    return nil
+    return m.repo.UpdateIdempotencyStatus(ctx, tenantID, key, int32(status))
 }
 
+// statusCapturingWriter captures response status code
+type statusCapturingWriter struct {
+    http.ResponseWriter
+    status int
+}
+
+func (w *statusCapturingWriter) WriteHeader(statusCode int) {
+    w.status = statusCode
+    w.ResponseWriter.WriteHeader(statusCode)
+}

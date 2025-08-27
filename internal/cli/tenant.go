@@ -78,11 +78,18 @@ func createTenant(ctx context.Context, name string) error {
 		return fmt.Errorf("failed to create tenant: %w", err)
 	}
 
-	// Output success message
-	fmt.Printf("✅ Tenant created successfully!\n")
-	fmt.Printf("   ID: %s\n", tenant.ID)
-	fmt.Printf("   Name: %s\n", tenant.Name)
-	fmt.Printf("   Created: %s\n", tenant.CreatedAt.Format(time.RFC3339))
+    // Output
+    if outputJSON {
+        return printJSON(map[string]interface{}{
+            "tenant_id": tenant.ID,
+            "name":      tenant.Name,
+            "created":   tenant.CreatedAt.Format(time.RFC3339),
+        })
+    }
+    fmt.Printf("✅ Tenant created successfully!\n")
+    fmt.Printf("   ID: %s\n", tenant.ID)
+    fmt.Printf("   Name: %s\n", tenant.Name)
+    fmt.Printf("   Created: %s\n", tenant.CreatedAt.Format(time.RFC3339))
 
 	return nil
 }

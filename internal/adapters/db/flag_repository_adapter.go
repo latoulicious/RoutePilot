@@ -14,7 +14,7 @@ import (
 
 // FlagRepositoryAdapter adapts the database repository for flag operations
 type FlagRepositoryAdapter struct {
-	queries *Queries
+    queries *Queries
 }
 
 // Ensure FlagRepositoryAdapter implements both interfaces
@@ -25,6 +25,25 @@ func NewFlagRepositoryAdapter(queries *Queries) *FlagRepositoryAdapter {
 	return &FlagRepositoryAdapter{
 		queries: queries,
 	}
+}
+
+// ListFlagsByTenant returns all flags for a tenant
+func (r *FlagRepositoryAdapter) ListFlagsByTenant(ctx context.Context, tenantID uuid.UUID) ([]*flags.Flag, error) {
+    var pgTenantID pgtype.UUID
+    if err := pgTenantID.Scan(tenantID); err != nil {
+        return nil, fmt.Errorf("invalid tenant ID: %v", err)
+    }
+    rows, err := r.queries.ListFlagsByTenant(ctx, pgTenantID)
+    if err != nil {
+        return nil, fmt.Errorf("failed to list flags: %v", err)
+    }
+    out := make([]*flags.Flag, 0, len(rows))
+    for _, dbf := range rows {
+        f, err := r.convertDBFlagToCore(dbf)
+        if err != nil { return nil, err }
+        out = append(out, f)
+    }
+    return out, nil
 }
 
 // GetFlagByKey retrieves a flag by tenant ID and key

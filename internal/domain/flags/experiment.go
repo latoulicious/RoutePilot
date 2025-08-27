@@ -40,7 +40,7 @@ func (e *ExperimentEngineImpl) ProcessExperiment(ctx context.Context, flag *Flag
     }
 
     // Check if subject qualifies for experiment traffic gating
-    if !e.isSubjectInTraffic(flag.Salt, assignment.SubjectID, exp.Traffic) {
+    if !e.isSubjectInTraffic(exp.Key, flag.Salt, assignment.SubjectID, exp.Traffic) {
         // Subject not in experiment traffic, return original flag value
         return &ExperimentResult{
             Value: assignment.ChosenVariant,
@@ -75,7 +75,7 @@ func (e *ExperimentEngineImpl) ProcessExperiment(ctx context.Context, flag *Flag
     }
 
     // Assign subject to a variant using weighted distribution
-    selectedVariant := e.selectVariantByWeight(flag.Salt, assignment.SubjectID, variants)
+    selectedVariant := e.selectVariantByWeight(exp.Key, flag.Salt, assignment.SubjectID, variants)
     if selectedVariant == nil {
         // No variant selected, return original flag value
         return &ExperimentResult{
@@ -108,7 +108,7 @@ func (e *ExperimentEngineImpl) isExperimentActive(exp *Experiment) bool {
 }
 
 // isSubjectInTraffic determines if a subject qualifies for experiment traffic gating
-func (e *ExperimentEngineImpl) isSubjectInTraffic(salt, subjectID string, trafficPercentage int) bool {
+func (e *ExperimentEngineImpl) isSubjectInTraffic(expKey, salt, subjectID string, trafficPercentage int) bool {
     if trafficPercentage <= 0 {
         return false
     }
@@ -116,15 +116,15 @@ func (e *ExperimentEngineImpl) isSubjectInTraffic(salt, subjectID string, traffi
         return true
     }
 
-    // Use a different salt prefix for traffic gating to ensure independence from flag evaluation
-    trafficBucket := CalculateBucket("traffic:"+salt, subjectID)
+    // Gate by exp.key + salt per plan
+    trafficBucket := CalculateBucket(expKey+":"+salt, subjectID)
     trafficThreshold := trafficPercentage * 100 // Convert percentage to bucket range (0-9999)
     
     return trafficBucket < trafficThreshold
 }
 
 // selectVariantByWeight selects a variant based on weighted distribution
-func (e *ExperimentEngineImpl) selectVariantByWeight(salt, subjectID string, variants []*ExperimentVariant) *ExperimentVariant {
+func (e *ExperimentEngineImpl) selectVariantByWeight(expKey, salt, subjectID string, variants []*ExperimentVariant) *ExperimentVariant {
     if len(variants) == 0 {
         return nil
     }
@@ -139,9 +139,8 @@ func (e *ExperimentEngineImpl) selectVariantByWeight(salt, subjectID string, var
         return nil
     }
 
-    // Use deterministic selection based on subject ID and salt
-    // Use a different salt prefix for variant selection to ensure independence
-    variantBucket := CalculateBucket("variant:"+salt, subjectID)
+    // Deterministic selection based on subject and exp.key + salt
+    variantBucket := CalculateBucket(expKey+":"+salt, subjectID)
     
     // Map bucket (0-9999) to weight range (0-totalWeight)
     selectedWeight := (variantBucket * totalWeight) / 10000
@@ -189,4 +188,3 @@ func NewExperimentError(errorType, message string, cause error) *ExperimentError
         Cause:   cause,
     }
 }
-

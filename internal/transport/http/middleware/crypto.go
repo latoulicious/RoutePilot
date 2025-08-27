@@ -3,6 +3,8 @@ package middleware
 import (
     "crypto/aes"
     "crypto/cipher"
+    "encoding/base64"
+    "encoding/hex"
     "fmt"
     "os"
 )
@@ -14,17 +16,27 @@ type AESGCMDecryptor struct {
 
 // NewAESGCMDecryptor creates a new AES-GCM decryptor using KEK from environment
 func NewAESGCMDecryptor() (*AESGCMDecryptor, error) {
-    kek := os.Getenv("API_KEY_ENCRYPTION_KEY")
-    if kek == "" {
-        return nil, fmt.Errorf("API_KEY_ENCRYPTION_KEY environment variable not set")
+    raw := os.Getenv("KEK")
+    if raw == "" {
+        raw = os.Getenv("API_KEY_ENCRYPTION_KEY")
+    }
+    if raw == "" {
+        return nil, fmt.Errorf("KEK/API_KEY_ENCRYPTION_KEY environment variable not set")
     }
 
-    // KEK should be 32 bytes for AES-256
-    if len(kek) != 32 {
-        return nil, fmt.Errorf("encryption key must be exactly 32 bytes")
+    // Accept raw 32 bytes, or hex/base64 encodings
+    key := []byte(raw)
+    if len(key) != 32 {
+        if b, err := hex.DecodeString(raw); err == nil && len(b) == 32 {
+            key = b
+        } else if b2, err2 := base64.StdEncoding.DecodeString(raw); err2 == nil && len(b2) == 32 {
+            key = b2
+        } else {
+            return nil, fmt.Errorf("KEK must be 32 bytes raw, hex, or base64")
+        }
     }
 
-    block, err := aes.NewCipher([]byte(kek))
+    block, err := aes.NewCipher(key)
     if err != nil {
         return nil, fmt.Errorf("failed to create AES cipher: %v", err)
     }
@@ -55,4 +67,3 @@ func (d *AESGCMDecryptor) Decrypt(encrypted []byte) ([]byte, error) {
 
     return plaintext, nil
 }
-

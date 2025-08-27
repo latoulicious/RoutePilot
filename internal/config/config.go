@@ -29,6 +29,18 @@ type AppConfig struct {
     HTTP  HTTPConfig
     DB    DBConfig
     Cache CacheConfig
+    EvalTimeout time.Duration
+    RateLimit   RateLimitConfig
+}
+
+// RateLimitConfig holds per-route rate limit settings
+type RateLimitConfig struct {
+    EvalRPS    int
+    EvalBurst  int
+    AdminRPS   int
+    AdminBurst int
+    ConvRPS    int
+    ConvBurst  int
 }
 
 // Load loads configuration from environment with sane defaults
@@ -62,6 +74,27 @@ func Load() (AppConfig, error) {
         CleanupInterval: getDuration("CACHE_CLEANUP_INTERVAL", 5*time.Minute),
     }
 
+    // Evaluation timeout
+    if v := os.Getenv("EVAL_TIMEOUT_MS"); v != "" {
+        if n, err := strconv.Atoi(v); err == nil && n > 0 {
+            cfg.EvalTimeout = time.Duration(n) * time.Millisecond
+        } else {
+            return cfg, fmt.Errorf("invalid EVAL_TIMEOUT_MS: %v", err)
+        }
+    } else {
+        cfg.EvalTimeout = 200 * time.Millisecond
+    }
+
+    // Rate limiting (defaults per plan)
+    cfg.RateLimit = RateLimitConfig{
+        EvalRPS:    getInt("RL_EVAL_RPS", 50),
+        EvalBurst:  getInt("RL_EVAL_BURST", 100),
+        AdminRPS:   getInt("RL_ADMIN_RPS", 10),
+        AdminBurst: getInt("RL_ADMIN_BURST", 20),
+        ConvRPS:    getInt("RL_CONV_RPS", 100),
+        ConvBurst:  getInt("RL_CONV_BURST", 200),
+    }
+
     return cfg, nil
 }
 
@@ -82,4 +115,3 @@ func getDuration(env string, def time.Duration) time.Duration {
     }
     return def
 }
-

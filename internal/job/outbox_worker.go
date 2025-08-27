@@ -1,14 +1,16 @@
 package job
 
 import (
-	"context"
-	"fmt"
-	"log/slog"
-	"time"
+    "context"
+    "fmt"
+    "log/slog"
+    "time"
 
-	"github.com/google/uuid"
-	"github.com/latoulicious/RoutePilot/internal/adapters/kafka"
-	"github.com/latoulicious/RoutePilot/internal/ports"
+    "github.com/google/uuid"
+    dbrepo "github.com/latoulicious/RoutePilot/internal/adapters/db"
+    "github.com/latoulicious/RoutePilot/internal/adapters/kafka"
+    dflags "github.com/latoulicious/RoutePilot/internal/domain/flags"
+    "github.com/latoulicious/RoutePilot/internal/ports"
 )
 
 // OutboxWorkerConfig holds configuration for the outbox worker
@@ -109,55 +111,34 @@ func (w *OutboxWorker) processLoop(ctx context.Context) {
 
 // processBatch processes a single batch of outbox events
 func (w *OutboxWorker) processBatch(ctx context.Context) error {
-	// Create a timeout context for this batch
-	batchCtx, cancel := context.WithTimeout(ctx, w.config.ProcessTimeout)
-	defer cancel()
+    // If the repository supports transactional claim, use it for correctness
+    if txRepo, ok := w.outboxRepo.(*dbrepo.OutboxRepositoryAdapter); ok {
+        batchCtx, cancel := context.WithTimeout(ctx, w.config.ProcessTimeout)
+        defer cancel()
+        return txRepo.WithClaimTx(batchCtx, w.config.BatchSize, func(events []*dflags.OutboxEvent) error { return w.publishAndLog(batchCtx, events) })
+    }
 
-	// Claim a batch of events
-	events, err := w.outboxRepo.ClaimBatch(batchCtx, w.config.BatchSize)
-	if err != nil {
-		return fmt.Errorf("failed to claim outbox batch: %w", err)
-	}
+    // Fallback: non-transactional (best-effort)
+    batchCtx, cancel := context.WithTimeout(ctx, w.config.ProcessTimeout)
+    defer cancel()
+    events, err := w.outboxRepo.ClaimBatch(batchCtx, w.config.BatchSize)
+    if err != nil { return fmt.Errorf("failed to claim outbox batch: %w", err) }
+    if len(events) == 0 { w.logger.Debug("No outbox events to process"); return nil }
+    if err := w.publishAndLog(batchCtx, events); err != nil { return err }
+    ids := make([]uuid.UUID, len(events))
+    for i, e := range events { ids[i] = e.ID }
+    if err := w.outboxRepo.MarkPublished(batchCtx, ids); err != nil { return fmt.Errorf("failed to mark events as published: %w", err) }
+    return nil
+}
 
-	if len(events) == 0 {
-		w.logger.Debug("No outbox events to process")
-		return nil
-	}
-
-	w.logger.Info("Processing outbox batch", "batch_size", len(events))
-
-	// Publish events to Kafka
-	if err := w.publisher.PublishEvents(batchCtx, events); err != nil {
-		w.logger.Error("Failed to publish events to Kafka",
-			"error", err,
-			"batch_size", len(events),
-		)
-		// Don't mark as published on failure - events will be retried
-		return fmt.Errorf("failed to publish events: %w", err)
-	}
-
-	// Mark events as published
-	eventIDs := make([]uuid.UUID, len(events))
-	for i, event := range events {
-		eventIDs[i] = event.ID
-	}
-
-	if err := w.outboxRepo.MarkPublished(batchCtx, eventIDs); err != nil {
-		w.logger.Error("Failed to mark events as published",
-			"error", err,
-			"batch_size", len(events),
-		)
-		// This is a critical error - events were published but not marked
-		// They will be published again on next run (at-least-once delivery)
-		return fmt.Errorf("failed to mark events as published: %w", err)
-	}
-
-	w.logger.Info("Successfully processed outbox batch",
-		"batch_size", len(events),
-		"published_count", len(eventIDs),
-	)
-
-	return nil
+func (w *OutboxWorker) publishAndLog(ctx context.Context, events []*dflags.OutboxEvent) error {
+    w.logger.Info("Processing outbox batch", "batch_size", len(events))
+    if err := w.publisher.PublishEvents(ctx, events); err != nil {
+        w.logger.Error("Failed to publish events to Kafka", "error", err, "batch_size", len(events))
+        return fmt.Errorf("failed to publish events: %w", err)
+    }
+    w.logger.Info("Successfully processed outbox batch", "batch_size", len(events))
+    return nil
 }
 
 // Health returns the health status of the worker

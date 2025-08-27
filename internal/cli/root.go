@@ -1,14 +1,16 @@
 package cli
 
 import (
-	"context"
-	"os"
+    "context"
+    "encoding/json"
+    "os"
 
-	"github.com/spf13/cobra"
+    "github.com/spf13/cobra"
 )
 
 var (
-	databaseURL string
+    databaseURL string
+    outputJSON  bool
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -29,11 +31,12 @@ func Execute(ctx context.Context) error {
 }
 
 func init() {
-	cobra.OnInitialize(initConfig)
+    cobra.OnInitialize(initConfig)
 
-	// Global flags
-	rootCmd.PersistentFlags().StringVar(&databaseURL, "database-url", "", "PostgreSQL database URL (required)")
-	rootCmd.MarkPersistentFlagRequired("database-url")
+    // Global flags
+    rootCmd.PersistentFlags().StringVar(&databaseURL, "database-url", "", "PostgreSQL database URL (required)")
+    rootCmd.MarkPersistentFlagRequired("database-url")
+    rootCmd.PersistentFlags().BoolVar(&outputJSON, "json", false, "Output JSON for machine-readable results")
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -44,4 +47,10 @@ func initConfig() {
 			databaseURL = envURL
 		}
 	}
+}
+
+func printJSON(v interface{}) error {
+    enc := json.NewEncoder(os.Stdout)
+    enc.SetIndent("", "  ")
+    return enc.Encode(v)
 }

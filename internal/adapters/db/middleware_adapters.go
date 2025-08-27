@@ -73,7 +73,7 @@ func (r *APIKeyRepositoryAdapter) UpdateAPIKeyLastUsed(ctx context.Context, keyI
 
 // IdempotencyRepositoryAdapter adapts the database repository for middleware use
 type IdempotencyRepositoryAdapter struct {
-	queries *Queries
+    queries *Queries
 }
 
 // NewIdempotencyRepositoryAdapter creates a new idempotency repository adapter
@@ -157,4 +157,20 @@ func (r *IdempotencyRepositoryAdapter) CreateIdempotencyKey(ctx context.Context,
 	}
 
 	return idempotencyKey, nil
+}
+
+// UpdateIdempotencyStatus updates stored status for an idempotency key
+func (r *IdempotencyRepositoryAdapter) UpdateIdempotencyStatus(ctx context.Context, tenantID, key uuid.UUID, status int32) error {
+    var pgTenantID, pgKey pgtype.UUID
+    if err := pgTenantID.Scan(tenantID); err != nil {
+        return fmt.Errorf("invalid tenant ID: %v", err)
+    }
+    if err := pgKey.Scan(key); err != nil {
+        return fmt.Errorf("invalid key: %v", err)
+    }
+    return r.queries.UpdateIdempotencyStatus(ctx, UpdateIdempotencyStatusParams{
+        TenantID: pgTenantID,
+        Key:      pgKey,
+        Status:   status,
+    })
 }

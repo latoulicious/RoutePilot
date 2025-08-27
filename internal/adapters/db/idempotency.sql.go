@@ -78,3 +78,20 @@ func (q *Queries) GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyPa
 	)
 	return i, err
 }
+
+const updateIdempotencyStatus = `-- name: UpdateIdempotencyStatus :exec
+UPDATE idempotency_keys
+SET status = $3
+WHERE tenant_id = $1 AND key = $2
+`
+
+type UpdateIdempotencyStatusParams struct {
+	TenantID pgtype.UUID `db:"tenant_id" json:"tenant_id"`
+	Key      pgtype.UUID `db:"key" json:"key"`
+	Status   int32       `db:"status" json:"status"`
+}
+
+func (q *Queries) UpdateIdempotencyStatus(ctx context.Context, arg UpdateIdempotencyStatusParams) error {
+	_, err := q.db.Exec(ctx, updateIdempotencyStatus, arg.TenantID, arg.Key, arg.Status)
+	return err
+}

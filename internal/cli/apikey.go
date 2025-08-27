@@ -86,10 +86,15 @@ func issueAPIKey(ctx context.Context, tenantStr, name string) error {
         return err
     }
 
+    if outputJSON {
+        return printJSON(map[string]string{
+            "api_key_id": ak.ID.String(),
+            "api_secret": secretPrintable,
+        })
+    }
     fmt.Printf("✅ API key issued!\n")
     fmt.Printf("   api_key_id: %s\n", ak.ID.String())
     fmt.Printf("   api_secret: %s\n", secretPrintable)
     fmt.Printf("   note: store this secret securely; it will not be shown again.\n")
     return nil
 }
-

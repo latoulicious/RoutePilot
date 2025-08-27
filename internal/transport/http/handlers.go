@@ -18,13 +18,15 @@ import (
 type FlagHandler struct {
     evaluator  flags.Evaluator
     outboxRepo ports.OutboxRepository
+    evalTimeout time.Duration
 }
 
 // NewFlagHandler creates a new flag handler
-func NewFlagHandler(evaluator flags.Evaluator, outboxRepo ports.OutboxRepository) *FlagHandler {
+func NewFlagHandler(evaluator flags.Evaluator, outboxRepo ports.OutboxRepository, evalTimeout time.Duration) *FlagHandler {
     return &FlagHandler{
         evaluator:  evaluator,
         outboxRepo: outboxRepo,
+        evalTimeout: evalTimeout,
     }
 }
 
@@ -57,8 +59,8 @@ type ErrorDetail struct {
 
 // EvaluateFlag handles GET /v1/flags/{key}/eval
 func (h *FlagHandler) EvaluateFlag(w http.ResponseWriter, r *http.Request) {
-    // Set timeout for flag evaluation (200ms as per requirements)
-    ctx, cancel := context.WithTimeout(r.Context(), 200*time.Millisecond)
+    // Set timeout for flag evaluation from configured value
+    ctx, cancel := context.WithTimeout(r.Context(), h.evalTimeout)
     defer cancel()
 
     // Extract flag key from URL path
@@ -201,7 +203,9 @@ func (h *FlagHandler) writeJSONResponse(w http.ResponseWriter, status int, data 
 type ConversionRequest struct {
     ExperimentKey string                 `json:"experiment_key" validate:"required"`
     SubjectID     string                 `json:"subject_id" validate:"required"`
-    ConversionKey string                 `json:"conversion_key" validate:"required"`
+    Metric        string                 `json:"metric"`
+    // Back-compat alias; prefer Metric per plan
+    ConversionKey string                 `json:"conversion_key"`
     Value         *float64               `json:"value,omitempty"`
     Properties    map[string]interface{} `json:"properties,omitempty"`
 }
@@ -238,8 +242,9 @@ func (h *FlagHandler) TrackConversion(w http.ResponseWriter, r *http.Request) {
         h.writeErrorResponse(w, http.StatusBadRequest, "MISSING_SUBJECT_ID", "subject_id is required")
         return
     }
-    if conversionReq.ConversionKey == "" {
-        h.writeErrorResponse(w, http.StatusBadRequest, "MISSING_CONVERSION_KEY", "conversion_key is required")
+    // Accept either metric or conversion_key; require at least one
+    if conversionReq.Metric == "" && conversionReq.ConversionKey == "" {
+        h.writeErrorResponse(w, http.StatusBadRequest, "MISSING_METRIC", "metric is required")
         return
     }
 
@@ -252,7 +257,7 @@ func (h *FlagHandler) TrackConversion(w http.ResponseWriter, r *http.Request) {
         h.writeErrorResponse(w, http.StatusBadRequest, "INVALID_SUBJECT_ID", "subject_id must be 255 characters or less")
         return
     }
-    if len(conversionReq.ConversionKey) > 255 {
+    if conversionReq.ConversionKey != "" && len(conversionReq.ConversionKey) > 255 {
         h.writeErrorResponse(w, http.StatusBadRequest, "INVALID_CONVERSION_KEY", "conversion_key must be 255 characters or less")
         return
     }
@@ -264,7 +269,7 @@ func (h *FlagHandler) TrackConversion(w http.ResponseWriter, r *http.Request) {
     }
 
     // Validate conversion key format (alphanumeric with underscores)
-    if !middleware.ValidateFlagKey(conversionReq.ConversionKey) {
+    if conversionReq.ConversionKey != "" && !middleware.ValidateFlagKey(conversionReq.ConversionKey) {
         h.writeErrorResponse(w, http.StatusBadRequest, "INVALID_CONVERSION_KEY", "conversion_key must be alphanumeric with underscores")
         return
     }
@@ -292,9 +297,15 @@ func (h *FlagHandler) publishConversionEvent(ctx context.Context, tenantID uuid.
         "conversion_id":  conversionID.String(),
         "experiment_key": req.ExperimentKey,
         "subject_id":     req.SubjectID,
-        "conversion_key": req.ConversionKey,
         "timestamp":      time.Now().UTC().Format(time.RFC3339),
     }
+
+    // prefer metric per plan; fall back to conversion_key
+    metric := req.Metric
+    if metric == "" {
+        metric = req.ConversionKey
+    }
+    conversionPayload["metric"] = metric
 
     // Add optional fields if present
     if req.Value != nil {

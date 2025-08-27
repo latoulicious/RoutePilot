@@ -27,6 +27,70 @@ func NewAdminHandler(flagRepo ports.FlagRepository, cache CacheInvalidator) *Adm
     }
 }
 
+// ListFlagsResponse item
+type ListFlagsResponse struct {
+    ID          uuid.UUID      `json:"id"`
+    Key         string         `json:"key"`
+    Description string         `json:"description"`
+    Type        flags.FlagType `json:"type"`
+    Enabled     bool           `json:"enabled"`
+    CreatedAt   time.Time      `json:"created_at"`
+    UpdatedAt   time.Time      `json:"updated_at"`
+}
+
+// ListFlags handles GET /v1/flags
+func (h *AdminHandler) ListFlags(w http.ResponseWriter, r *http.Request) {
+    authCtx, ok := middleware.GetAuthContext(r)
+    if !ok {
+        h.writeErrorResponse(w, http.StatusUnauthorized, "AUTHENTICATION_REQUIRED", "Authentication context not found")
+        return
+    }
+    flagsList, err := h.flagRepo.ListFlagsByTenant(r.Context(), authCtx.TenantID)
+    if err != nil {
+        h.writeErrorResponse(w, http.StatusInternalServerError, "LIST_FLAGS_FAILED", "Failed to list flags")
+        return
+    }
+    resp := make([]ListFlagsResponse, 0, len(flagsList))
+    for _, f := range flagsList {
+        resp = append(resp, ListFlagsResponse{
+            ID:          f.ID,
+            Key:         f.Key,
+            Description: f.Description,
+            Type:        f.Type,
+            Enabled:     f.Enabled,
+            CreatedAt:   f.CreatedAt,
+            UpdatedAt:   f.UpdatedAt,
+        })
+    }
+    h.writeJSONResponse(w, http.StatusOK, resp)
+}
+
+// ListFlagRules handles GET /v1/flags/{key}/rules
+func (h *AdminHandler) ListFlagRules(w http.ResponseWriter, r *http.Request) {
+    authCtx, ok := middleware.GetAuthContext(r)
+    if !ok {
+        h.writeErrorResponse(w, http.StatusUnauthorized, "AUTHENTICATION_REQUIRED", "Authentication context not found")
+        return
+    }
+    vars := mux.Vars(r)
+    flagKey := vars["key"]
+    if flagKey == "" || !middleware.ValidateFlagKey(flagKey) {
+        h.writeErrorResponse(w, http.StatusBadRequest, "INVALID_FLAG_KEY", "Flag key is required and must be valid")
+        return
+    }
+    flag, err := h.flagRepo.GetFlagByKey(r.Context(), authCtx.TenantID, flagKey)
+    if err != nil {
+        h.writeErrorResponse(w, http.StatusNotFound, "FLAG_NOT_FOUND", "Flag not found")
+        return
+    }
+    rules, err := h.flagRepo.GetFlagRules(r.Context(), flag.ID)
+    if err != nil {
+        h.writeErrorResponse(w, http.StatusInternalServerError, "LIST_RULES_FAILED", "Failed to get flag rules")
+        return
+    }
+    h.writeJSONResponse(w, http.StatusOK, rules)
+}
+
 // CreateFlagRequest represents the request body for flag creation
 type CreateFlagRequest struct {
     Key         string         `json:"key" validate:"required"`
@@ -269,6 +333,7 @@ type UpdateFlagRequest struct {
     Description *string `json:"description,omitempty"`
     Enabled     *bool   `json:"enabled,omitempty"`
     Salt        *string `json:"salt,omitempty"`
+    RotateSalt  *bool   `json:"rotate_salt,omitempty"`
 }
 
 // UpdateFlagResponse represents the response for flag updates
@@ -336,6 +401,12 @@ func (h *AdminHandler) UpdateFlag(w http.ResponseWriter, r *http.Request) {
         Description: updateReq.Description,
         Enabled:     updateReq.Enabled,
         Salt:        updateReq.Salt,
+    }
+
+    // If rotate_salt=true, generate a new salt
+    if updateReq.RotateSalt != nil && *updateReq.RotateSalt {
+        s := generateSalt()
+        updates.Salt = &s
     }
 
     // Update flag in database

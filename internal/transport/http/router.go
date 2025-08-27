@@ -2,7 +2,9 @@ package httpapi
 
 import (
     "context"
+    "fmt"
     "net/http"
+    "time"
 
     "github.com/google/uuid"
     "github.com/gorilla/mux"
@@ -27,6 +29,7 @@ type RouterConfig struct {
     IdempotencyRepo middleware.IdempotencyRepository
     Decryptor       middleware.SecretDecryptor
     RateLimitConfig *middleware.RateLimitConfig
+    EvalTimeout     time.Duration
 }
 
 // NewRouter creates a new HTTP router with all routes and middleware configured
@@ -34,7 +37,7 @@ func NewRouter(config RouterConfig) *mux.Router {
     router := mux.NewRouter()
 
     // Create handlers
-    flagHandler := NewFlagHandler(config.Evaluator, config.OutboxRepo)
+    flagHandler := NewFlagHandler(config.Evaluator, config.OutboxRepo, config.EvalTimeout)
     adminHandler := NewAdminHandler(config.FlagRepo, config.Cache)
     experimentHandler := NewExperimentHandler(config.ExperimentRepo, config.FlagRepo, config.Cache)
 
@@ -60,6 +63,10 @@ func NewRouter(config RouterConfig) *mux.Router {
         Methods("POST")
 
     // Admin endpoints for flag management
+    // List flags (GET /v1/flags)
+    v1.Handle("/flags",
+        securityChain.Then(http.HandlerFunc(adminHandler.ListFlags))).
+        Methods("GET")
     // Create flag endpoint (POST /v1/flags)
     v1.Handle("/flags",
         securityChain.Then(http.HandlerFunc(adminHandler.CreateFlag))).
@@ -70,12 +77,21 @@ func NewRouter(config RouterConfig) *mux.Router {
         securityChain.Then(http.HandlerFunc(adminHandler.CreateFlagRule))).
         Methods("POST")
 
+    // List flag rules endpoint (GET /v1/flags/{key}/rules)
+    v1.Handle("/flags/{key}/rules",
+        securityChain.Then(http.HandlerFunc(adminHandler.ListFlagRules))).
+        Methods("GET")
+
     // Update flag endpoint (PATCH /v1/flags/{key})
     v1.Handle("/flags/{key}",
         securityChain.Then(http.HandlerFunc(adminHandler.UpdateFlag))).
         Methods("PATCH")
 
     // Experiment management endpoints
+    // List experiments (GET /v1/experiments)
+    v1.Handle("/experiments",
+        securityChain.Then(http.HandlerFunc(experimentHandler.ListExperiments))).
+        Methods("GET")
     // Create experiment endpoint (POST /v1/experiments)
     v1.Handle("/experiments",
         securityChain.Then(http.HandlerFunc(experimentHandler.CreateExperiment))).
@@ -86,10 +102,18 @@ func NewRouter(config RouterConfig) *mux.Router {
         securityChain.Then(http.HandlerFunc(experimentHandler.CreateVariant))).
         Methods("POST")
 
+    // List experiment variants (GET /v1/experiments/{key}/variants)
+    v1.Handle("/experiments/{key}/variants",
+        securityChain.Then(http.HandlerFunc(experimentHandler.ListVariants))).
+        Methods("GET")
+
     // Update experiment endpoint (PATCH /v1/experiments/{key})
     v1.Handle("/experiments/{key}",
         securityChain.Then(http.HandlerFunc(experimentHandler.UpdateExperiment))).
         Methods("PATCH")
+
+    // Config endpoint (authenticated)
+    v1.Handle("/config", securityChain.Then(http.HandlerFunc(configHandler(config.RateLimitConfig, config.EvalTimeout)))).Methods("GET")
 
     // Health check endpoint (no authentication required)
     router.HandleFunc("/health", healthCheckHandler).Methods("GET")
@@ -102,7 +126,7 @@ func NewTestRouter(evaluator flags.Evaluator, outboxRepo ports.OutboxRepository)
     router := mux.NewRouter()
 
     // Create handlers
-    flagHandler := NewFlagHandler(evaluator, outboxRepo)
+    flagHandler := NewFlagHandler(evaluator, outboxRepo, 200*time.Millisecond)
 
     // API v1 routes with minimal middleware for testing
     v1 := router.PathPrefix("/v1").Subrouter()
@@ -134,6 +158,16 @@ func NewTestRouter(evaluator flags.Evaluator, outboxRepo ports.OutboxRepository)
     router.HandleFunc("/health", healthCheckHandler).Methods("GET")
 
     return router
+}
+
+// configHandler returns current eval timeout and rate limit config
+func configHandler(rl *middleware.RateLimitConfig, evalTimeout time.Duration) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusOK)
+        fmt.Fprintf(w, `{"eval_timeout_ms":%d,"rate_limit":{"eval_rps":%d,"eval_burst":%d,"admin_rps":%d,"admin_burst":%d,"conv_rps":%d,"conv_burst":%d}}`,
+            int(evalTimeout/time.Millisecond), rl.EvalRequests, rl.EvalBurst, rl.AdminRequests, rl.AdminBurst, rl.ConversionRequests, rl.ConversionBurst)
+    }
 }
 
 // healthCheckHandler provides a simple health check endpoint

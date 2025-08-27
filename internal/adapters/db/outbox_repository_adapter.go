@@ -11,12 +11,58 @@ import (
 
 // OutboxRepositoryAdapter implements the OutboxRepository interface
 type OutboxRepositoryAdapter struct {
-	repo *Repository
+    repo *Repository
 }
 
 // NewOutboxRepositoryAdapter creates a new outbox repository adapter
 func NewOutboxRepositoryAdapter(repo *Repository) *OutboxRepositoryAdapter {
-	return &OutboxRepositoryAdapter{repo: repo}
+    return &OutboxRepositoryAdapter{repo: repo}
+}
+
+// WithClaimTx runs a transactional claim -> publish (via callback) -> mark published -> commit
+func (r *OutboxRepositoryAdapter) WithClaimTx(ctx context.Context, limit int, fn func([]*flags.OutboxEvent) error) error {
+    tx, q, err := r.repo.BeginTx(ctx)
+    if err != nil { return err }
+    committed := false
+    defer func() {
+        if !committed {
+            _ = tx.Rollback(ctx)
+        }
+    }()
+
+    rows, err := q.ClaimOutboxBatch(ctx, int32(limit))
+    if err != nil { return err }
+    events := make([]*flags.OutboxEvent, len(rows))
+    for i, dbEvent := range rows {
+        ev := &flags.OutboxEvent{
+            ID:        uuid.UUID(dbEvent.ID.Bytes),
+            TenantID:  uuid.UUID(dbEvent.TenantID.Bytes),
+            Topic:     dbEvent.Topic,
+            Payload:   dbEvent.Payload,
+            CreatedAt: dbEvent.CreatedAt.Time,
+        }
+        if dbEvent.Key.Valid { k := dbEvent.Key.String; ev.Key = &k }
+        events[i] = ev
+    }
+    if len(events) == 0 {
+        // nothing to do; commit no-op
+        if err := tx.Commit(ctx); err != nil { return err }
+        committed = true
+        return nil
+    }
+
+    if err := fn(events); err != nil {
+        // leave rows unmarked; rollback so locks release and retry later
+        return err
+    }
+
+    // mark published within same tx
+    pgUUIDs := make([]pgtype.UUID, len(events))
+    for i, e := range events { pgUUIDs[i] = pgtype.UUID{Bytes: e.ID, Valid: true} }
+    if err := q.MarkOutboxPublished(ctx, pgUUIDs); err != nil { return err }
+    if err := tx.Commit(ctx); err != nil { return err }
+    committed = true
+    return nil
 }
 
 // AddEvent adds a new event to the outbox

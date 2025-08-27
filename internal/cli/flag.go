@@ -36,6 +36,15 @@ var flagCreateCmd = &cobra.Command{
     },
 }
 
+var flagListCmd = &cobra.Command{
+    Use:   "list [tenant_id]",
+    Short: "List flags for a tenant",
+    Args:  cobra.ExactArgs(1),
+    RunE: func(cmd *cobra.Command, args []string) error {
+        return listFlags(cmd.Context(), args[0])
+    },
+}
+
 var flagEnableCmd = &cobra.Command{
     Use:   "enable [flag_id]",
     Short: "Enable a flag",
@@ -99,6 +108,19 @@ func init() {
     ruleAddCmd.RunE = func(cmd *cobra.Command, args []string) error {
         return addRule(cmd.Context(), args[0], rulePriority, ruleRollout, ruleVariant)
     }
+    // list
+    flagCmd.AddCommand(flagListCmd)
+
+    // rule list subcommand
+    ruleListCmd := &cobra.Command{
+        Use:   "rule list [flag_id]",
+        Short: "List rules for a flag",
+        Args:  cobra.ExactArgs(1),
+        RunE: func(cmd *cobra.Command, args []string) error {
+            return listRules(cmd.Context(), args[0])
+        },
+    }
+    flagCmd.AddCommand(ruleListCmd)
 }
 
 func createFlag(ctx context.Context, tenantStr, key, ftype, desc string, enabled bool) error {
@@ -141,7 +163,7 @@ func createFlag(ctx context.Context, tenantStr, key, ftype, desc string, enabled
         UpdatedAt:   time.Now(),
     }
     if err := repo.CreateFlag(ctx, flag); err != nil { return err }
-
+    if outputJSON { return printJSON(flag) }
     fmt.Printf("✅ Flag created\n")
     fmt.Printf("   id: %s\n   key: %s\n   type: %s\n   enabled: %v\n   salt: %s\n", flag.ID, flag.Key, flag.Type, flag.Enabled, flag.Salt)
     return nil
@@ -158,6 +180,7 @@ func setFlagEnabled(ctx context.Context, flagIDStr string, enabled bool) error {
     repo := db.NewFlagRepositoryAdapter(queries)
     upd := dflags.FlagUpdates{ Enabled: &enabled }
     if err := repo.UpdateFlag(ctx, flagID, upd); err != nil { return err }
+    if outputJSON { return printJSON(map[string]any{"flag_id": flagID, "enabled": enabled}) }
     fmt.Printf("✅ Flag %s\n", map[bool]string{true:"enabled", false:"disabled"}[enabled])
     return nil
 }
@@ -174,6 +197,7 @@ func rotateFlagSalt(ctx context.Context, flagIDStr string) error {
     newSalt := uuid.New().String()
     upd := dflags.FlagUpdates{ Salt: &newSalt }
     if err := repo.UpdateFlag(ctx, flagID, upd); err != nil { return err }
+    if outputJSON { return printJSON(map[string]any{"flag_id": flagID, "new_salt": newSalt}) }
     fmt.Printf("✅ Salt rotated\n   new_salt: %s\n", newSalt)
     return nil
 }
@@ -202,7 +226,48 @@ func addRule(ctx context.Context, flagIDStr string, priority, rollout int, varia
         Variant:  raw,
     }
     if err := repo.CreateFlagRule(ctx, rule); err != nil { return err }
+    if outputJSON {
+        return printJSON(map[string]interface{}{"id": rule.ID, "priority": rule.Priority, "rollout": rule.Rollout})
+    }
     fmt.Printf("✅ Rule added\n   id: %s\n   priority: %d\n   rollout: %d\n", rule.ID, rule.Priority, rule.Rollout)
+    return nil
+}
+
+func listRules(ctx context.Context, flagIDStr string) error {
+    if databaseURL == "" { return fmt.Errorf("database URL is required") }
+    flagID, err := uuid.Parse(flagIDStr)
+    if err != nil { return fmt.Errorf("invalid flag_id: %w", err) }
+    pool, err := db.Connect(databaseURL)
+    if err != nil { return err }
+    defer pool.Close()
+    queries := db.New(pool)
+    repo := db.NewFlagRepositoryAdapter(queries)
+    rules, err := repo.GetFlagRules(ctx, flagID)
+    if err != nil { return err }
+    if outputJSON { return printJSON(rules) }
+    for _, r := range rules {
+        fmt.Printf("%d\t%d\t%s\n", r.Priority, r.Rollout, string(r.Variant))
+    }
+    return nil
+}
+
+func listFlags(ctx context.Context, tenantStr string) error {
+    if databaseURL == "" { return fmt.Errorf("database URL is required") }
+    tenantID, err := uuid.Parse(tenantStr)
+    if err != nil { return fmt.Errorf("invalid tenant_id: %w", err) }
+    pool, err := db.Connect(databaseURL)
+    if err != nil { return err }
+    defer pool.Close()
+    queries := db.New(pool)
+    repo := db.NewFlagRepositoryAdapter(queries)
+    flags, err := repo.ListFlagsByTenant(ctx, tenantID)
+    if err != nil { return err }
+    if outputJSON {
+        return printJSON(flags)
+    }
+    for _, f := range flags {
+        fmt.Printf("%s\t%s\t%s\t%v\n", f.ID, f.Key, f.Type, f.Enabled)
+    }
     return nil
 }
 
@@ -214,4 +279,3 @@ func isValidKey(s string) bool {
     }
     return len(s) > 0
 }
-
