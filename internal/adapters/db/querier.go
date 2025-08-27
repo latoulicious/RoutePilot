@@ -23,6 +23,7 @@ type Querier interface {
 	CreateTenant(ctx context.Context, name string) (Tenant, error)
 	DeleteFlagRule(ctx context.Context, arg DeleteFlagRuleParams) error
 	GetAPIKey(ctx context.Context, id pgtype.UUID) (ApiKey, error)
+	GetAPIKeyByKeyID(ctx context.Context, keyID string) (ApiKey, error)
 	GetAPIKeyByTenant(ctx context.Context, arg GetAPIKeyByTenantParams) (ApiKey, error)
 	GetAssignment(ctx context.Context, arg GetAssignmentParams) (FlagAssignment, error)
 	GetExperimentByFlagID(ctx context.Context, flagID pgtype.UUID) (Experiment, error)

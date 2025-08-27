@@ -14,6 +14,8 @@ CREATE TABLE api_keys (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
+    key_id TEXT NOT NULL UNIQUE,
+    secret_hash TEXT NOT NULL,
     secret_enc BYTEA NOT NULL,
     active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -108,6 +110,7 @@ CREATE TABLE idempotency_keys (
 -- Indexes for performance
 CREATE INDEX idx_api_keys_tenant_id ON api_keys(tenant_id);
 CREATE INDEX idx_api_keys_active ON api_keys(active) WHERE active = TRUE;
+CREATE INDEX idx_api_keys_key_id ON api_keys(key_id);
 
 CREATE INDEX idx_flags_tenant_id ON flags(tenant_id);
 CREATE INDEX idx_flags_tenant_key ON flags(tenant_id, key);

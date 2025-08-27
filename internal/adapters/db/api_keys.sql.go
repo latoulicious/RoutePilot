@@ -12,24 +12,34 @@ import (
 )
 
 const createAPIKey = `-- name: CreateAPIKey :one
-INSERT INTO api_keys (tenant_id, name, secret_enc) 
-VALUES ($1, $2, $3) 
-RETURNING id, tenant_id, name, secret_enc, active, created_at, last_used_at
+INSERT INTO api_keys (tenant_id, name, key_id, secret_hash, secret_enc) 
+VALUES ($1, $2, $3, $4, $5) 
+RETURNING id, tenant_id, name, key_id, secret_hash, secret_enc, active, created_at, last_used_at
 `
 
 type CreateAPIKeyParams struct {
-	TenantID  pgtype.UUID `db:"tenant_id" json:"tenant_id"`
-	Name      string      `db:"name" json:"name"`
-	SecretEnc []byte      `db:"secret_enc" json:"secret_enc"`
+	TenantID   pgtype.UUID `db:"tenant_id" json:"tenant_id"`
+	Name       string      `db:"name" json:"name"`
+	KeyID      string      `db:"key_id" json:"key_id"`
+	SecretHash string      `db:"secret_hash" json:"secret_hash"`
+	SecretEnc  []byte      `db:"secret_enc" json:"secret_enc"`
 }
 
 func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error) {
-	row := q.db.QueryRow(ctx, createAPIKey, arg.TenantID, arg.Name, arg.SecretEnc)
+	row := q.db.QueryRow(ctx, createAPIKey,
+		arg.TenantID,
+		arg.Name,
+		arg.KeyID,
+		arg.SecretHash,
+		arg.SecretEnc,
+	)
 	var i ApiKey
 	err := row.Scan(
 		&i.ID,
 		&i.TenantID,
 		&i.Name,
+		&i.KeyID,
+		&i.SecretHash,
 		&i.SecretEnc,
 		&i.Active,
 		&i.CreatedAt,
@@ -39,7 +49,7 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Api
 }
 
 const getAPIKey = `-- name: GetAPIKey :one
-SELECT id, tenant_id, name, secret_enc, active, created_at, last_used_at FROM api_keys 
+SELECT id, tenant_id, name, key_id, secret_hash, secret_enc, active, created_at, last_used_at FROM api_keys 
 WHERE id = $1 AND active = TRUE
 `
 
@@ -50,6 +60,30 @@ func (q *Queries) GetAPIKey(ctx context.Context, id pgtype.UUID) (ApiKey, error)
 		&i.ID,
 		&i.TenantID,
 		&i.Name,
+		&i.KeyID,
+		&i.SecretHash,
+		&i.SecretEnc,
+		&i.Active,
+		&i.CreatedAt,
+		&i.LastUsedAt,
+	)
+	return i, err
+}
+
+const getAPIKeyByKeyID = `-- name: GetAPIKeyByKeyID :one
+SELECT id, tenant_id, name, key_id, secret_hash, secret_enc, active, created_at, last_used_at FROM api_keys 
+WHERE key_id = $1 AND active = TRUE
+`
+
+func (q *Queries) GetAPIKeyByKeyID(ctx context.Context, keyID string) (ApiKey, error) {
+	row := q.db.QueryRow(ctx, getAPIKeyByKeyID, keyID)
+	var i ApiKey
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Name,
+		&i.KeyID,
+		&i.SecretHash,
 		&i.SecretEnc,
 		&i.Active,
 		&i.CreatedAt,
@@ -59,7 +93,7 @@ func (q *Queries) GetAPIKey(ctx context.Context, id pgtype.UUID) (ApiKey, error)
 }
 
 const getAPIKeyByTenant = `-- name: GetAPIKeyByTenant :one
-SELECT id, tenant_id, name, secret_enc, active, created_at, last_used_at FROM api_keys 
+SELECT id, tenant_id, name, key_id, secret_hash, secret_enc, active, created_at, last_used_at FROM api_keys 
 WHERE tenant_id = $1 AND id = $2 AND active = TRUE
 `
 
@@ -75,6 +109,8 @@ func (q *Queries) GetAPIKeyByTenant(ctx context.Context, arg GetAPIKeyByTenantPa
 		&i.ID,
 		&i.TenantID,
 		&i.Name,
+		&i.KeyID,
+		&i.SecretHash,
 		&i.SecretEnc,
 		&i.Active,
 		&i.CreatedAt,

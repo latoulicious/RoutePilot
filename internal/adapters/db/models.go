@@ -101,6 +101,8 @@ type ApiKey struct {
 	ID         pgtype.UUID        `db:"id" json:"id"`
 	TenantID   pgtype.UUID        `db:"tenant_id" json:"tenant_id"`
 	Name       string             `db:"name" json:"name"`
+	KeyID      string             `db:"key_id" json:"key_id"`
+	SecretHash string             `db:"secret_hash" json:"secret_hash"`
 	SecretEnc  []byte             `db:"secret_enc" json:"secret_enc"`
 	Active     pgtype.Bool        `db:"active" json:"active"`
 	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`

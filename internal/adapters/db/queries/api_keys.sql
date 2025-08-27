@@ -1,6 +1,6 @@
 -- name: CreateAPIKey :one
-INSERT INTO api_keys (tenant_id, name, secret_enc) 
-VALUES ($1, $2, $3) 
+INSERT INTO api_keys (tenant_id, name, key_id, secret_hash, secret_enc) 
+VALUES ($1, $2, $3, $4, $5) 
 RETURNING *;
 
 -- name: GetAPIKey :one
@@ -15,3 +15,7 @@ WHERE tenant_id = $1 AND id = $2 AND active = TRUE;
 UPDATE api_keys 
 SET last_used_at = NOW() 
 WHERE id = $1;
+
+-- name: GetAPIKeyByKeyID :one
+SELECT * FROM api_keys 
+WHERE key_id = $1 AND active = TRUE;
