@@ -1,12 +1,18 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+
+	"github.com/latoulicious/RoutePilot/internal/cli"
 )
 
 func main() {
-	fmt.Println("FaaS CLI Tool")
-	// TODO: Implement CLI commands
-	os.Exit(0)
+	ctx := context.Background()
+
+	if err := cli.Execute(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 }
