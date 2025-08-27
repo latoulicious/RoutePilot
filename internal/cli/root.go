@@ -13,13 +13,13 @@ var (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "faas-cli",
-	Short: "FaaS (Feature-flags-as-a-Service) CLI tool",
-	Long: `FaaS CLI is a command-line tool for managing tenants, feature flags, 
-experiments, and API keys in the FaaS feature flag service.
+    Use:   "routepilot",
+    Short: "RoutePilot CLI",
+    Long: `RoutePilot CLI manages tenants, feature flags, experiments, and API keys
+for the RoutePilot feature flag service.
 
-This tool provides administrative capabilities for bootstrapping and 
-configuring the service without requiring a web interface.`,
+This tool provides administrative capabilities for bootstrapping and
+configuring the service without a web interface.`,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

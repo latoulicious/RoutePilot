@@ -9,14 +9,14 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/latoulicious/RoutePilot/internal/adapters/db"
-	"github.com/latoulicious/RoutePilot/internal/core/flags"
+    "github.com/latoulicious/RoutePilot/internal/domain/flags"
 )
 
 // tenantCmd represents the tenant command
 var tenantCmd = &cobra.Command{
 	Use:   "tenant",
 	Short: "Manage tenants",
-	Long:  `Create and manage tenants in the FaaS system.`,
+Long:  `Create and manage tenants in the RoutePilot system.`,
 }
 
 // tenantCreateCmd represents the tenant create command

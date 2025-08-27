@@ -1,13 +1,13 @@
 package db
 
 import (
-	"context"
-	"database/sql"
-	"fmt"
+    "context"
+    "database/sql"
+    "fmt"
 
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/latoulicious/RoutePilot/internal/ports/http/middleware"
+    "github.com/google/uuid"
+    "github.com/jackc/pgx/v5/pgtype"
+    "github.com/latoulicious/RoutePilot/internal/transport/http/middleware"
 )
 
 // APIKeyRepositoryAdapter adapts the database repository for middleware use

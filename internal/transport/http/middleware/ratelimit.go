@@ -3,6 +3,7 @@ package middleware
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -55,18 +56,25 @@ func (tb *TokenBucket) Allow() bool {
 
 // RateLimitConfig defines rate limiting configuration for different endpoints
 type RateLimitConfig struct {
-	EvalRequests       int // requests per second for evaluation endpoints
-	AdminRequests      int // requests per second for admin endpoints
-	ConversionRequests int // requests per second for conversion endpoints
+    EvalRequests       int // tokens per second for evaluation endpoints
+    EvalBurst          int // burst capacity for evaluation endpoints
+    AdminRequests      int // tokens per second for admin endpoints
+    AdminBurst         int // burst capacity for admin endpoints
+    ConversionRequests int // tokens per second for conversion endpoints
+    ConversionBurst    int // burst capacity for conversion endpoints
 }
 
 // DefaultRateLimitConfig returns default rate limiting configuration
 func DefaultRateLimitConfig() *RateLimitConfig {
-	return &RateLimitConfig{
-		EvalRequests:       100, // 100 req/sec for flag evaluation
-		AdminRequests:      10,  // 10 req/sec for admin operations
-		ConversionRequests: 50,  // 50 req/sec for conversion tracking
-	}
+    return &RateLimitConfig{
+        // plan.md defaults
+        EvalRequests:       50,   // 50 rps for eval
+        EvalBurst:          100,  // burst 100
+        AdminRequests:      10,   // 10 rps for admin
+        AdminBurst:         20,   // burst 20
+        ConversionRequests: 100,  // 100 rps for conversions
+        ConversionBurst:    200,  // burst 200
+    }
 }
 
 // RateLimitMiddleware provides per-tenant rate limiting using token bucket algorithm
@@ -104,12 +112,12 @@ func (m *RateLimitMiddleware) Middleware(next http.Handler) http.Handler {
 		}
 
 		// Determine endpoint type and rate limit
-		endpointType := m.getEndpointType(r.URL.Path)
-		limit := m.getRateLimit(endpointType)
+    endpointType := m.getEndpointType(r.URL.Path)
+    rate, burst := m.getRateAndBurst(endpointType)
 
 		// Get or create token bucket for this tenant/endpoint combination
 		bucketKey := fmt.Sprintf("%s:%s", authCtx.TenantID.String(), endpointType)
-		bucket := m.getOrCreateBucket(bucketKey, limit)
+    bucket := m.getOrCreateBucket(bucketKey, burst, rate)
 
 		// Check if request is allowed
 		if !bucket.Allow() {
@@ -124,11 +132,11 @@ func (m *RateLimitMiddleware) Middleware(next http.Handler) http.Handler {
 // getEndpointType determines the type of endpoint based on the path
 func (m *RateLimitMiddleware) getEndpointType(path string) string {
 	switch {
-	case contains(path, "/eval"):
+	case strings.Contains(path, "/eval"):
 		return "eval"
-	case contains(path, "/conversions"):
+	case strings.Contains(path, "/conversions"):
 		return "conversion"
-	case contains(path, "/flags") || contains(path, "/experiments"):
+	case strings.Contains(path, "/flags") || strings.Contains(path, "/experiments"):
 		return "admin"
 	default:
 		return "admin" // Default to admin limits for unknown endpoints
@@ -136,24 +144,24 @@ func (m *RateLimitMiddleware) getEndpointType(path string) string {
 }
 
 // getRateLimit returns the rate limit for a given endpoint type
-func (m *RateLimitMiddleware) getRateLimit(endpointType string) int {
-	switch endpointType {
-	case "eval":
-		return m.config.EvalRequests
-	case "conversion":
-		return m.config.ConversionRequests
-	case "admin":
-		return m.config.AdminRequests
-	default:
-		return m.config.AdminRequests
-	}
+func (m *RateLimitMiddleware) getRateAndBurst(endpointType string) (rate int, burst int) {
+    switch endpointType {
+    case "eval":
+        return m.config.EvalRequests, m.config.EvalBurst
+    case "conversion":
+        return m.config.ConversionRequests, m.config.ConversionBurst
+    case "admin":
+        return m.config.AdminRequests, m.config.AdminBurst
+    default:
+        return m.config.AdminRequests, m.config.AdminBurst
+    }
 }
 
 // getOrCreateBucket gets an existing bucket or creates a new one
-func (m *RateLimitMiddleware) getOrCreateBucket(key string, limit int) *TokenBucket {
-	m.mutex.RLock()
-	bucket, exists := m.buckets[key]
-	m.mutex.RUnlock()
+func (m *RateLimitMiddleware) getOrCreateBucket(key string, capacity int, rate int) *TokenBucket {
+    m.mutex.RLock()
+    bucket, exists := m.buckets[key]
+    m.mutex.RUnlock()
 
 	if exists {
 		return bucket
@@ -167,18 +175,18 @@ func (m *RateLimitMiddleware) getOrCreateBucket(key string, limit int) *TokenBuc
 		return bucket
 	}
 
-	// Create new bucket with capacity equal to limit and refill rate equal to limit
-	bucket = NewTokenBucket(limit, limit)
-	m.buckets[key] = bucket
+    // Create new bucket with configured capacity (burst) and refill rate (rps)
+    bucket = NewTokenBucket(capacity, rate)
+    m.buckets[key] = bucket
 
-	return bucket
+    return bucket
 }
 
 // checkGlobalRateLimit applies a global rate limit for unauthenticated requests
 func (m *RateLimitMiddleware) checkGlobalRateLimit(_ *http.Request) bool {
-	// For unauthenticated requests, use a global bucket with conservative limits
-	bucket := m.getOrCreateBucket("global", 10) // 10 req/sec globally
-	return bucket.Allow()
+    // For unauthenticated requests, use a global bucket with conservative limits
+    bucket := m.getOrCreateBucket("global", 10, 10) // 10 rps, burst 10 globally
+    return bucket.Allow()
 }
 
 // writeRateLimitResponse writes a rate limit exceeded response
@@ -197,24 +205,4 @@ func (m *RateLimitMiddleware) CleanupExpiredBuckets() {
 	// In a production system, you'd track last access time and remove old buckets
 	// For now, this is a placeholder for the cleanup logic
 	// You could run this periodically in a goroutine
-}
-
-// contains checks if a string contains a substring (case-insensitive)
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) &&
-		(s == substr ||
-			(len(s) > len(substr) &&
-				(s[:len(substr)] == substr ||
-					s[len(s)-len(substr):] == substr ||
-					indexOf(s, substr) >= 0)))
-}
-
-// indexOf returns the index of substr in s, or -1 if not found
-func indexOf(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
 }

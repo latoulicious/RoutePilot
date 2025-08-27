@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/latoulicious/RoutePilot/internal/core/flags"
+    "github.com/latoulicious/RoutePilot/internal/domain/flags"
 	"github.com/latoulicious/RoutePilot/internal/ports"
 )
 

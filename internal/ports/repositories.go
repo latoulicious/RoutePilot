@@ -4,17 +4,18 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/latoulicious/RoutePilot/internal/core/flags"
+    "github.com/latoulicious/RoutePilot/internal/domain/flags"
 )
 
 // FlagRepository defines the interface for flag data access
 type FlagRepository interface {
-	GetFlagByKey(ctx context.Context, tenantID uuid.UUID, key string) (*flags.Flag, error)
-	GetFlagByID(ctx context.Context, flagID uuid.UUID) (*flags.Flag, error)
-	GetFlagRules(ctx context.Context, flagID uuid.UUID) ([]*flags.FlagRule, error)
-	CreateFlag(ctx context.Context, flag *flags.Flag) error
-	UpdateFlag(ctx context.Context, flagID uuid.UUID, updates flags.FlagUpdates) error
-	DeleteFlag(ctx context.Context, flagID uuid.UUID) error
+    GetFlagByKey(ctx context.Context, tenantID uuid.UUID, key string) (*flags.Flag, error)
+    GetFlagByID(ctx context.Context, flagID uuid.UUID) (*flags.Flag, error)
+    GetFlagRules(ctx context.Context, flagID uuid.UUID) ([]*flags.FlagRule, error)
+    CreateFlagRule(ctx context.Context, rule *flags.FlagRule) error
+    CreateFlag(ctx context.Context, flag *flags.Flag) error
+    UpdateFlag(ctx context.Context, flagID uuid.UUID, updates flags.FlagUpdates) error
+    DeleteFlag(ctx context.Context, flagID uuid.UUID) error
 }
 
 // AssignmentRepository defines the interface for assignment data access

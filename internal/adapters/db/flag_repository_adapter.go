@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/latoulicious/RoutePilot/internal/core/flags"
+    "github.com/latoulicious/RoutePilot/internal/domain/flags"
 	"github.com/latoulicious/RoutePilot/internal/ports"
 )
 

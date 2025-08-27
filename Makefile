@@ -23,11 +23,11 @@ all: generate build test
 
 # Development database (requires Docker)
 db-up:
-	docker run --name faas-postgres -e POSTGRES_PASSWORD=password -e POSTGRES_DB=faas -p 5432:5432 -d postgres:15
+docker run --name routepilot-postgres -e POSTGRES_PASSWORD=password -e POSTGRES_DB=routepilot -p 5432:5432 -d postgres:15
 
 db-down:
-	docker stop faas-postgres || true
-	docker rm faas-postgres || true
+docker stop routepilot-postgres || true
+docker rm routepilot-postgres || true
 
 # Install development dependencies
 deps:

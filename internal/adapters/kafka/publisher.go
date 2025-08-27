@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/IBM/sarama"
-	"github.com/latoulicious/RoutePilot/internal/core/flags"
+    "github.com/latoulicious/RoutePilot/internal/domain/flags"
 )
 
 // Publisher defines the interface for publishing events to Kafka

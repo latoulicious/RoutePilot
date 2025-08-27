@@ -18,7 +18,7 @@ func main() {
 		Level: slog.LevelInfo,
 	}))
 
-	logger.Info("Starting FaaS Outbox Worker")
+    logger.Info("Starting RoutePilot Outbox Worker")
 
 	// Load configuration
 	config, err := job.LoadConfigFromEnv()
@@ -79,5 +79,5 @@ func main() {
 		os.Exit(1)
 	}
 
-	logger.Info("FaaS Outbox Worker stopped successfully")
+    logger.Info("RoutePilot Outbox Worker stopped successfully")
 }

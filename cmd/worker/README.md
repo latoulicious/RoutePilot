@@ -1,4 +1,4 @@
-# FaaS Outbox Worker
+# RoutePilot Outbox Worker
 
 The outbox worker is responsible for processing events from the outbox table and publishing them to Kafka topics. It implements the outbox pattern to ensure reliable event delivery.
 
@@ -40,7 +40,7 @@ The worker is configured via environment variables:
 
 ```bash
 # Set required environment variables
-export DATABASE_URL="postgres://user:password@localhost:5432/faas"
+export DATABASE_URL="postgres://user:password@localhost:5432/routepilot"
 export KAFKA_BROKERS="localhost:9092"
 
 # Run the worker
