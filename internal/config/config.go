@@ -2,8 +2,10 @@ package config
 
 import (
     "fmt"
+    "net"
     "os"
     "strconv"
+    "strings"
     "time"
 )
 
@@ -47,7 +49,7 @@ type RateLimitConfig struct {
 func Load() (AppConfig, error) {
     cfg := AppConfig{}
 
-    // HTTP
+    // HTTP: support HTTP_PORT or plan's HTTP_ADDR (host:port)
     port := 8080
     if v := os.Getenv("HTTP_PORT"); v != "" {
         if p, err := strconv.Atoi(v); err == nil {
@@ -55,15 +57,34 @@ func Load() (AppConfig, error) {
         } else {
             return cfg, fmt.Errorf("invalid HTTP_PORT: %w", err)
         }
+    } else if addr := os.Getenv("HTTP_ADDR"); addr != "" {
+        // Try to parse :port or host:port
+        // If begins with ':', trim leading ':' and parse
+        if strings.HasPrefix(addr, ":") {
+            if p, err := strconv.Atoi(strings.TrimPrefix(addr, ":")); err == nil {
+                port = p
+            } else {
+                return cfg, fmt.Errorf("invalid HTTP_ADDR port: %w", err)
+            }
+        } else if _, p, err := net.SplitHostPort(addr); err == nil {
+            if pi, err := strconv.Atoi(p); err == nil {
+                port = pi
+            } else {
+                return cfg, fmt.Errorf("invalid HTTP_ADDR port: %w", err)
+            }
+        } else {
+            return cfg, fmt.Errorf("invalid HTTP_ADDR; expected host:port or :port")
+        }
     }
     cfg.HTTP = HTTPConfig{Port: port}
 
-    // DB
-    dbURL := os.Getenv("DATABASE_URL")
+    // DB: prefer PG_DSN (plan), fallback to DATABASE_URL
+    dbURL := os.Getenv("PG_DSN")
     if dbURL == "" {
-        // not strictly required for local runs if using mocks, but app expects it
-        // return error to surface misconfig early
-        return cfg, fmt.Errorf("DATABASE_URL is required")
+        dbURL = os.Getenv("DATABASE_URL")
+    }
+    if dbURL == "" {
+        return cfg, fmt.Errorf("PG_DSN or DATABASE_URL is required")
     }
     cfg.DB = DBConfig{URL: dbURL}
 

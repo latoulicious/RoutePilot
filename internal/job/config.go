@@ -51,10 +51,14 @@ func LoadConfigFromEnv() (*WorkerConfig, error) {
 }
 
 func loadDatabaseConfig() (*DatabaseConfig, error) {
-	url := os.Getenv("DATABASE_URL")
-	if url == "" {
-		return nil, fmt.Errorf("DATABASE_URL environment variable is required")
-	}
+    // Prefer PG_DSN (plan), fallback to DATABASE_URL
+    url := os.Getenv("PG_DSN")
+    if url == "" {
+        url = os.Getenv("DATABASE_URL")
+    }
+    if url == "" {
+        return nil, fmt.Errorf("PG_DSN or DATABASE_URL environment variable is required")
+    }
 
 	maxConnections := getEnvInt("DATABASE_MAX_CONNECTIONS", 10)
 	maxIdleTime := getEnvDuration("DATABASE_MAX_IDLE_TIME", 30*time.Minute)

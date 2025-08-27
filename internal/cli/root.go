@@ -34,19 +34,22 @@ func init() {
     cobra.OnInitialize(initConfig)
 
     // Global flags
-    rootCmd.PersistentFlags().StringVar(&databaseURL, "database-url", "", "PostgreSQL database URL (required)")
+    rootCmd.PersistentFlags().StringVar(&databaseURL, "database-url", "", "PostgreSQL DSN; or set PG_DSN/DATABASE_URL")
     rootCmd.MarkPersistentFlagRequired("database-url")
     rootCmd.PersistentFlags().BoolVar(&outputJSON, "json", false, "Output JSON for machine-readable results")
 }
 
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
-	// If database URL is not provided via flag, try environment variable
-	if databaseURL == "" {
-		if envURL := os.Getenv("DATABASE_URL"); envURL != "" {
-			databaseURL = envURL
-		}
-	}
+    // If database URL is not provided via flag, try environment variable
+    if databaseURL == "" {
+        // Prefer PG_DSN (per plan), fallback to DATABASE_URL
+        if envURL := os.Getenv("PG_DSN"); envURL != "" {
+            databaseURL = envURL
+        } else if envURL := os.Getenv("DATABASE_URL"); envURL != "" {
+            databaseURL = envURL
+        }
+    }
 }
 
 func printJSON(v interface{}) error {

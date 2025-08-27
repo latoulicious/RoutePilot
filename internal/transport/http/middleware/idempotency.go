@@ -53,8 +53,8 @@ func (m *IdempotencyMiddleware) Middleware(next http.Handler) http.Handler {
         // Get idempotency key from header
         idempotencyKeyHeader := r.Header.Get("Idempotency-Key")
         if idempotencyKeyHeader == "" {
-            // Idempotency key is optional, continue without it
-            next.ServeHTTP(w, r)
+            // Enforce presence for write operations per plan.md
+            writeErrorResponse(w, http.StatusBadRequest, "MISSING_IDEMPOTENCY_KEY", "Idempotency-Key header is required for write operations")
             return
         }
 

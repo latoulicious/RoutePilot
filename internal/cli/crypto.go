@@ -4,6 +4,8 @@ import (
     "crypto/aes"
     "crypto/cipher"
     "crypto/rand"
+    "encoding/base64"
+    "encoding/hex"
     "errors"
     "fmt"
     "os"
@@ -11,19 +13,39 @@ import (
 
 // loadKEK loads the encryption key from env (prefer KEK, fallback API_KEY_ENCRYPTION_KEY)
 func loadKEK() ([]byte, error) {
-    if v := os.Getenv("KEK"); v != "" {
-        if len(v) == 32 { // raw 32-byte string
-            return []byte(v), nil
+    // Prefer KEK, fallback to API_KEY_ENCRYPTION_KEY
+    if raw := os.Getenv("KEK"); raw != "" {
+        if key, err := decodeKey(raw); err == nil {
+            return key, nil
+        } else {
+            return nil, err
         }
-        return nil, fmt.Errorf("KEK must be 32 bytes for AES-256-GCM")
     }
-    if v := os.Getenv("API_KEY_ENCRYPTION_KEY"); v != "" {
-        if len(v) == 32 {
-            return []byte(v), nil
+    if raw := os.Getenv("API_KEY_ENCRYPTION_KEY"); raw != "" {
+        if key, err := decodeKey(raw); err == nil {
+            return key, nil
+        } else {
+            return nil, err
         }
-        return nil, fmt.Errorf("API_KEY_ENCRYPTION_KEY must be 32 bytes")
     }
-    return nil, errors.New("KEK not set; please export KEK or API_KEY_ENCRYPTION_KEY (32 bytes)")
+    return nil, errors.New("KEK not set; please export KEK or API_KEY_ENCRYPTION_KEY (32-byte raw, hex, or base64)")
+}
+
+// decodeKey accepts raw 32-byte string, or hex/base64 encodings that decode to 32 bytes
+func decodeKey(raw string) ([]byte, error) {
+    // Raw 32 bytes (as-is) support
+    if len(raw) == 32 {
+        return []byte(raw), nil
+    }
+    // Hex
+    if b, err := hex.DecodeString(raw); err == nil && len(b) == 32 {
+        return b, nil
+    }
+    // Base64 (std)
+    if b, err := base64.StdEncoding.DecodeString(raw); err == nil && len(b) == 32 {
+        return b, nil
+    }
+    return nil, fmt.Errorf("invalid KEK length/encoding; must be 32-byte raw, hex, or base64")
 }
 
 // encryptAESGCM encrypts plaintext with AES-GCM using key; returns nonce||ciphertext
@@ -46,4 +68,3 @@ func encryptAESGCM(key, plaintext []byte) ([]byte, error) {
     out = append(out, sealed...)
     return out, nil
 }
-

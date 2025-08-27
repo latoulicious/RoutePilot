@@ -49,9 +49,13 @@ func SecurityMiddlewareChain(
     rateLimit := NewRateLimitMiddleware(rateLimitConfig)
 
     return NewChain(
+        // Validate and hash body first so auth can use X-Body-Hash
         validation.Middleware,
-        rateLimit.Middleware,
+        // Authenticate to identify tenant before applying per-tenant rate limits
         auth.Middleware,
+        // Apply per-tenant rate limits
+        rateLimit.Middleware,
+        // Enforce idempotency for write operations
         idempotency.Middleware,
     )
 }
@@ -66,4 +70,3 @@ func PublicMiddlewareChain(rateLimitConfig *RateLimitConfig) *Chain {
         rateLimit.Middleware,
     )
 }
-
