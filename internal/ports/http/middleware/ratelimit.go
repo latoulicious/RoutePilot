@@ -9,11 +9,11 @@ import (
 
 // TokenBucket represents a token bucket for rate limiting
 type TokenBucket struct {
-	capacity     int
-	tokens       int
-	refillRate   int           // tokens per second
-	lastRefill   time.Time
-	mutex        sync.Mutex
+	capacity   int
+	tokens     int
+	refillRate int // tokens per second
+	lastRefill time.Time
+	mutex      sync.Mutex
 }
 
 // NewTokenBucket creates a new token bucket
@@ -175,7 +175,7 @@ func (m *RateLimitMiddleware) getOrCreateBucket(key string, limit int) *TokenBuc
 }
 
 // checkGlobalRateLimit applies a global rate limit for unauthenticated requests
-func (m *RateLimitMiddleware) checkGlobalRateLimit(r *http.Request) bool {
+func (m *RateLimitMiddleware) checkGlobalRateLimit(_ *http.Request) bool {
 	// For unauthenticated requests, use a global bucket with conservative limits
 	bucket := m.getOrCreateBucket("global", 10) // 10 req/sec globally
 	return bucket.Allow()
@@ -201,12 +201,12 @@ func (m *RateLimitMiddleware) CleanupExpiredBuckets() {
 
 // contains checks if a string contains a substring (case-insensitive)
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && 
-		   (s == substr || 
-		    (len(s) > len(substr) && 
-		     (s[:len(substr)] == substr || 
-		      s[len(s)-len(substr):] == substr ||
-		      indexOf(s, substr) >= 0)))
+	return len(s) >= len(substr) &&
+		(s == substr ||
+			(len(s) > len(substr) &&
+				(s[:len(substr)] == substr ||
+					s[len(s)-len(substr):] == substr ||
+					indexOf(s, substr) >= 0)))
 }
 
 // indexOf returns the index of substr in s, or -1 if not found

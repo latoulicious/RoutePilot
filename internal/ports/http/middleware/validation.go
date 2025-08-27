@@ -35,7 +35,7 @@ func (m *ValidationMiddleware) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Validate request size
 		if r.ContentLength > MaxRequestSize {
-			writeErrorResponse(w, http.StatusRequestEntityTooLarge, "REQUEST_TOO_LARGE", 
+			writeErrorResponse(w, http.StatusRequestEntityTooLarge, "REQUEST_TOO_LARGE",
 				fmt.Sprintf("Request body too large, maximum %d bytes allowed", MaxRequestSize))
 			return
 		}
@@ -111,7 +111,7 @@ func (m *ValidationMiddleware) validatePath(r *http.Request) error {
 }
 
 // processRequestBody validates and processes the request body
-func (m *ValidationMiddleware) processRequestBody(w http.ResponseWriter, r *http.Request) error {
+func (m *ValidationMiddleware) processRequestBody(_ http.ResponseWriter, r *http.Request) error {
 	if r.Body == nil {
 		return nil
 	}
@@ -155,7 +155,7 @@ func (m *ValidationMiddleware) validateJSON(body []byte) error {
 
 	// Additional JSON security checks
 	bodyStr := string(body)
-	
+
 	// Check for potential JSON injection patterns
 	if strings.Contains(bodyStr, "__proto__") || strings.Contains(bodyStr, "constructor") {
 		return fmt.Errorf("potentially malicious JSON content")

@@ -10,6 +10,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const idempotencyContextKey contextKey = "idempotency_key"
+
 // IdempotencyRepository defines the interface for idempotency key operations
 type IdempotencyRepository interface {
 	GetIdempotencyKey(ctx context.Context, tenantID, key uuid.UUID) (*IdempotencyKey, error)
@@ -77,7 +79,7 @@ func (m *IdempotencyMiddleware) Middleware(next http.Handler) http.Handler {
 		if err == nil {
 			// Key exists, check if it matches current request
 			if !m.requestMatches(existingKey, r.Method, pathHash) {
-				writeErrorResponse(w, http.StatusConflict, "IDEMPOTENCY_KEY_CONFLICT", 
+				writeErrorResponse(w, http.StatusConflict, "IDEMPOTENCY_KEY_CONFLICT",
 					"Idempotency key already used for different request")
 				return
 			}
@@ -92,13 +94,13 @@ func (m *IdempotencyMiddleware) Middleware(next http.Handler) http.Handler {
 		_, err = m.repo.CreateIdempotencyKey(r.Context(), authCtx.TenantID, idempotencyKey, r.Method, pathHash, 0)
 		if err != nil {
 			// If creation fails due to conflict, another request is processing
-			writeErrorResponse(w, http.StatusConflict, "IDEMPOTENCY_KEY_PROCESSING", 
+			writeErrorResponse(w, http.StatusConflict, "IDEMPOTENCY_KEY_PROCESSING",
 				"Request with this idempotency key is currently being processed")
 			return
 		}
 
 		// Add idempotency context to request
-		ctx := context.WithValue(r.Context(), "idempotency_key", idempotencyKey)
+		ctx := context.WithValue(r.Context(), idempotencyContextKey, idempotencyKey)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -131,7 +133,7 @@ func (m *IdempotencyMiddleware) requestMatches(existing *IdempotencyKey, method 
 
 // GetIdempotencyKey extracts idempotency key from request context
 func GetIdempotencyKey(r *http.Request) (uuid.UUID, bool) {
-	key, ok := r.Context().Value("idempotency_key").(uuid.UUID)
+	key, ok := r.Context().Value(idempotencyContextKey).(uuid.UUID)
 	return key, ok
 }
 

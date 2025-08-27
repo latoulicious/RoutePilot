@@ -37,11 +37,11 @@ type CreateExperimentRequest struct {
 
 // CreateExperimentResponse represents the response for experiment creation
 type CreateExperimentResponse struct {
-	ID       uuid.UUID                `json:"id"`
-	Key      string                   `json:"key"`
-	FlagKey  string                   `json:"flag_key"`
-	Status   flags.ExperimentStatus   `json:"status"`
-	Traffic  int                      `json:"traffic"`
+	ID       uuid.UUID                  `json:"id"`
+	Key      string                     `json:"key"`
+	FlagKey  string                     `json:"flag_key"`
+	Status   flags.ExperimentStatus     `json:"status"`
+	Traffic  int                        `json:"traffic"`
 	Variants []*flags.ExperimentVariant `json:"variants"`
 }
 
@@ -170,7 +170,7 @@ func (h *ExperimentHandler) CreateVariant(w http.ResponseWriter, r *http.Request
 	// Extract experiment key from URL path
 	vars := mux.Vars(r)
 	experimentKey := vars["key"]
-	
+
 	if experimentKey == "" {
 		h.writeErrorResponse(w, http.StatusBadRequest, "MISSING_EXPERIMENT_KEY", "Experiment key is required")
 		return
@@ -198,7 +198,7 @@ func (h *ExperimentHandler) CreateVariant(w http.ResponseWriter, r *http.Request
 		h.writeErrorResponse(w, http.StatusBadRequest, "INVALID_WEIGHT", "Weight must be between 0 and 100")
 		return
 	}
-	if createReq.Value == nil || len(createReq.Value) == 0 {
+	if len(createReq.Value) == 0 {
 		h.writeErrorResponse(w, http.StatusBadRequest, "MISSING_VALUE", "value is required")
 		return
 	}
@@ -267,10 +267,10 @@ type UpdateExperimentRequest struct {
 
 // UpdateExperimentResponse represents the response for experiment updates
 type UpdateExperimentResponse struct {
-	ID       uuid.UUID                `json:"id"`
-	Key      string                   `json:"key"`
-	Status   flags.ExperimentStatus   `json:"status"`
-	Traffic  int                      `json:"traffic"`
+	ID       uuid.UUID                  `json:"id"`
+	Key      string                     `json:"key"`
+	Status   flags.ExperimentStatus     `json:"status"`
+	Traffic  int                        `json:"traffic"`
 	Variants []*flags.ExperimentVariant `json:"variants"`
 }
 
@@ -286,7 +286,7 @@ func (h *ExperimentHandler) UpdateExperiment(w http.ResponseWriter, r *http.Requ
 	// Extract experiment key from URL path
 	vars := mux.Vars(r)
 	experimentKey := vars["key"]
-	
+
 	if experimentKey == "" {
 		h.writeErrorResponse(w, http.StatusBadRequest, "MISSING_EXPERIMENT_KEY", "Experiment key is required")
 		return
@@ -313,7 +313,7 @@ func (h *ExperimentHandler) UpdateExperiment(w http.ResponseWriter, r *http.Requ
 			flags.ExperimentStatusPaused,
 			flags.ExperimentStatusStopped,
 		}
-		
+
 		isValid := false
 		for _, validStatus := range validStatuses {
 			if *updateReq.Status == validStatus {
@@ -321,7 +321,7 @@ func (h *ExperimentHandler) UpdateExperiment(w http.ResponseWriter, r *http.Requ
 				break
 			}
 		}
-		
+
 		if !isValid {
 			h.writeErrorResponse(w, http.StatusBadRequest, "INVALID_STATUS", "Status must be one of: draft, running, paused, stopped")
 			return
@@ -374,7 +374,7 @@ func (h *ExperimentHandler) UpdateExperiment(w http.ResponseWriter, r *http.Requ
 func (h *ExperimentHandler) writeJSONResponse(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	
+
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		// If we can't encode the response, write a simple error
 		w.WriteHeader(http.StatusInternalServerError)
@@ -390,6 +390,6 @@ func (h *ExperimentHandler) writeErrorResponse(w http.ResponseWriter, status int
 			Message: message,
 		},
 	}
-	
+
 	h.writeJSONResponse(w, status, response)
 }

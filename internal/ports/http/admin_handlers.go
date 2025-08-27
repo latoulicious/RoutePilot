@@ -20,8 +20,6 @@ type AdminHandler struct {
 	cache        CacheInvalidator   // Interface for cache invalidation
 }
 
-
-
 // NewAdminHandler creates a new admin handler
 func NewAdminHandler(flagRepo ports.FlagRepository, flagRuleRepo FlagRuleRepository, cache CacheInvalidator) *AdminHandler {
 	return &AdminHandler{
@@ -33,23 +31,23 @@ func NewAdminHandler(flagRepo ports.FlagRepository, flagRuleRepo FlagRuleReposit
 
 // CreateFlagRequest represents the request body for flag creation
 type CreateFlagRequest struct {
-	Key         string          `json:"key" validate:"required"`
-	Description string          `json:"description"`
-	Type        flags.FlagType  `json:"type" validate:"required"`
-	Enabled     bool            `json:"enabled"`
-	Salt        string          `json:"salt"`
+	Key         string         `json:"key" validate:"required"`
+	Description string         `json:"description"`
+	Type        flags.FlagType `json:"type" validate:"required"`
+	Enabled     bool           `json:"enabled"`
+	Salt        string         `json:"salt"`
 }
 
 // CreateFlagResponse represents the response for flag creation
 type CreateFlagResponse struct {
-	ID          uuid.UUID       `json:"id"`
-	Key         string          `json:"key"`
-	Description string          `json:"description"`
-	Type        flags.FlagType  `json:"type"`
-	Enabled     bool            `json:"enabled"`
-	Salt        string          `json:"salt"`
-	CreatedAt   time.Time       `json:"created_at"`
-	UpdatedAt   time.Time       `json:"updated_at"`
+	ID          uuid.UUID      `json:"id"`
+	Key         string         `json:"key"`
+	Description string         `json:"description"`
+	Type        flags.FlagType `json:"type"`
+	Enabled     bool           `json:"enabled"`
+	Salt        string         `json:"salt"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
 }
 
 // CreateFlag handles POST /v1/flags
@@ -179,7 +177,7 @@ func (h *AdminHandler) CreateFlagRule(w http.ResponseWriter, r *http.Request) {
 	// Extract flag key from URL path
 	vars := mux.Vars(r)
 	flagKey := vars["key"]
-	
+
 	if flagKey == "" {
 		h.writeErrorResponse(w, http.StatusBadRequest, "MISSING_FLAG_KEY", "Flag key is required")
 		return
@@ -207,7 +205,7 @@ func (h *AdminHandler) CreateFlagRule(w http.ResponseWriter, r *http.Request) {
 		h.writeErrorResponse(w, http.StatusBadRequest, "INVALID_ROLLOUT", "Rollout must be between 0 and 100")
 		return
 	}
-	if createReq.Variant == nil || len(createReq.Variant) == 0 {
+	if len(createReq.Variant) == 0 {
 		h.writeErrorResponse(w, http.StatusBadRequest, "MISSING_VARIANT", "variant is required")
 		return
 	}
@@ -277,14 +275,14 @@ type UpdateFlagRequest struct {
 
 // UpdateFlagResponse represents the response for flag updates
 type UpdateFlagResponse struct {
-	ID          uuid.UUID       `json:"id"`
-	Key         string          `json:"key"`
-	Description string          `json:"description"`
-	Type        flags.FlagType  `json:"type"`
-	Enabled     bool            `json:"enabled"`
-	Salt        string          `json:"salt"`
-	CreatedAt   time.Time       `json:"created_at"`
-	UpdatedAt   time.Time       `json:"updated_at"`
+	ID          uuid.UUID      `json:"id"`
+	Key         string         `json:"key"`
+	Description string         `json:"description"`
+	Type        flags.FlagType `json:"type"`
+	Enabled     bool           `json:"enabled"`
+	Salt        string         `json:"salt"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
 }
 
 // UpdateFlag handles PATCH /v1/flags/{key}
@@ -299,7 +297,7 @@ func (h *AdminHandler) UpdateFlag(w http.ResponseWriter, r *http.Request) {
 	// Extract flag key from URL path
 	vars := mux.Vars(r)
 	flagKey := vars["key"]
-	
+
 	if flagKey == "" {
 		h.writeErrorResponse(w, http.StatusBadRequest, "MISSING_FLAG_KEY", "Flag key is required")
 		return
@@ -380,7 +378,7 @@ func (h *AdminHandler) UpdateFlag(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) writeJSONResponse(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	
+
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		// If we can't encode the response, write a simple error
 		w.WriteHeader(http.StatusInternalServerError)
@@ -396,7 +394,7 @@ func (h *AdminHandler) writeErrorResponse(w http.ResponseWriter, status int, cod
 			Message: message,
 		},
 	}
-	
+
 	h.writeJSONResponse(w, status, response)
 }
 
@@ -430,11 +428,11 @@ func isNotFoundError(err error) bool {
 
 // contains checks if a string contains a substring (case-insensitive)
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || 
-		(len(s) > len(substr) && 
-			(s[:len(substr)] == substr || 
-			 s[len(s)-len(substr):] == substr || 
-			 indexOf(s, substr) >= 0)))
+	return len(s) >= len(substr) && (s == substr ||
+		(len(s) > len(substr) &&
+			(s[:len(substr)] == substr ||
+				s[len(s)-len(substr):] == substr ||
+				indexOf(s, substr) >= 0)))
 }
 
 // indexOf returns the index of substr in s, or -1 if not found

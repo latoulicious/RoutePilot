@@ -14,6 +14,11 @@ import (
 	"github.com/google/uuid"
 )
 
+// contextKey is a custom type for context keys to avoid collisions
+type contextKey string
+
+const AuthContextKey contextKey = "auth"
+
 // AuthContext holds authentication information for the request
 type AuthContext struct {
 	TenantID uuid.UUID
@@ -65,7 +70,7 @@ func (m *HMACAuthMiddleware) Middleware(next http.Handler) http.Handler {
 		}
 
 		// Add auth context to request
-		ctx := context.WithValue(r.Context(), "auth", authCtx)
+		ctx := context.WithValue(r.Context(), AuthContextKey, authCtx)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -85,7 +90,7 @@ func (m *HMACAuthMiddleware) authenticate(r *http.Request) (*AuthContext, error)
 	if !strings.HasPrefix(authHeader, "Bearer ") {
 		return nil, fmt.Errorf("invalid authorization header format")
 	}
-	
+
 	keyIDStr := strings.TrimPrefix(authHeader, "Bearer ")
 	keyID, err := uuid.Parse(keyIDStr)
 	if err != nil {
@@ -140,10 +145,10 @@ func (m *HMACAuthMiddleware) authenticate(r *http.Request) (*AuthContext, error)
 // verifySignature verifies the HMAC-SHA256 signature
 func (m *HMACAuthMiddleware) verifySignature(r *http.Request, secret, timestamp, signature string) bool {
 	// Create signature payload: METHOD + PATH + QUERY + TIMESTAMP + BODY
-	payload := fmt.Sprintf("%s%s%s%s", 
-		r.Method, 
-		r.URL.Path, 
-		r.URL.RawQuery, 
+	payload := fmt.Sprintf("%s%s%s%s",
+		r.Method,
+		r.URL.Path,
+		r.URL.RawQuery,
 		timestamp,
 	)
 
@@ -166,7 +171,7 @@ func (m *HMACAuthMiddleware) verifySignature(r *http.Request, secret, timestamp,
 
 // GetAuthContext extracts authentication context from request
 func GetAuthContext(r *http.Request) (*AuthContext, bool) {
-	auth, ok := r.Context().Value("auth").(*AuthContext)
+	auth, ok := r.Context().Value(AuthContextKey).(*AuthContext)
 	return auth, ok
 }
 

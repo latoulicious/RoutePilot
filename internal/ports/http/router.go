@@ -56,44 +56,44 @@ func NewRouter(config RouterConfig) *mux.Router {
 	v1 := router.PathPrefix("/v1").Subrouter()
 
 	// Flag evaluation endpoint (GET /v1/flags/{key}/eval)
-	v1.Handle("/flags/{key}/eval", 
+	v1.Handle("/flags/{key}/eval",
 		securityChain.Then(http.HandlerFunc(flagHandler.EvaluateFlag))).
 		Methods("GET")
 
 	// Conversion tracking endpoint (POST /v1/experiments/conversions)
-	v1.Handle("/experiments/conversions", 
+	v1.Handle("/experiments/conversions",
 		securityChain.Then(http.HandlerFunc(flagHandler.TrackConversion))).
 		Methods("POST")
 
 	// Admin endpoints for flag management
 	// Create flag endpoint (POST /v1/flags)
-	v1.Handle("/flags", 
+	v1.Handle("/flags",
 		securityChain.Then(http.HandlerFunc(adminHandler.CreateFlag))).
 		Methods("POST")
 
 	// Create flag rule endpoint (POST /v1/flags/{key}/rules)
-	v1.Handle("/flags/{key}/rules", 
+	v1.Handle("/flags/{key}/rules",
 		securityChain.Then(http.HandlerFunc(adminHandler.CreateFlagRule))).
 		Methods("POST")
 
 	// Update flag endpoint (PATCH /v1/flags/{key})
-	v1.Handle("/flags/{key}", 
+	v1.Handle("/flags/{key}",
 		securityChain.Then(http.HandlerFunc(adminHandler.UpdateFlag))).
 		Methods("PATCH")
 
 	// Experiment management endpoints
 	// Create experiment endpoint (POST /v1/experiments)
-	v1.Handle("/experiments", 
+	v1.Handle("/experiments",
 		securityChain.Then(http.HandlerFunc(experimentHandler.CreateExperiment))).
 		Methods("POST")
 
 	// Create experiment variant endpoint (POST /v1/experiments/{key}/variants)
-	v1.Handle("/experiments/{key}/variants", 
+	v1.Handle("/experiments/{key}/variants",
 		securityChain.Then(http.HandlerFunc(experimentHandler.CreateVariant))).
 		Methods("POST")
 
 	// Update experiment endpoint (PATCH /v1/experiments/{key})
-	v1.Handle("/experiments/{key}", 
+	v1.Handle("/experiments/{key}",
 		securityChain.Then(http.HandlerFunc(experimentHandler.UpdateExperiment))).
 		Methods("PATCH")
 
@@ -121,18 +121,18 @@ func NewTestRouter(evaluator flags.Evaluator, outboxRepo ports.OutboxRepository)
 				TenantID: uuid.New(),
 				APIKeyID: uuid.New(),
 			}
-			ctx := context.WithValue(r.Context(), "auth", authCtx)
+			ctx := context.WithValue(r.Context(), middleware.AuthContextKey, authCtx)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 
 	// Flag evaluation endpoint with test middleware
-	v1.Handle("/flags/{key}/eval", 
+	v1.Handle("/flags/{key}/eval",
 		testAuthMiddleware(http.HandlerFunc(flagHandler.EvaluateFlag))).
 		Methods("GET")
 
 	// Conversion tracking endpoint with test middleware
-	v1.Handle("/experiments/conversions", 
+	v1.Handle("/experiments/conversions",
 		testAuthMiddleware(http.HandlerFunc(flagHandler.TrackConversion))).
 		Methods("POST")
 

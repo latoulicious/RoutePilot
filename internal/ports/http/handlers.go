@@ -64,7 +64,7 @@ func (h *FlagHandler) EvaluateFlag(w http.ResponseWriter, r *http.Request) {
 	// Extract flag key from URL path
 	vars := mux.Vars(r)
 	flagKey := vars["key"]
-	
+
 	if flagKey == "" {
 		h.writeErrorResponse(w, http.StatusBadRequest, "MISSING_FLAG_KEY", "Flag key is required")
 		return
@@ -111,7 +111,7 @@ func (h *FlagHandler) EvaluateFlag(w http.ResponseWriter, r *http.Request) {
 			h.writeErrorResponse(w, http.StatusRequestTimeout, "EVALUATION_TIMEOUT", "Flag evaluation timed out")
 			return
 		}
-		
+
 		// For other errors, return safe default and log the error
 		// In production, you'd want proper logging here
 		result = &flags.EvaluationResult{
@@ -143,12 +143,12 @@ func (h *FlagHandler) EvaluateFlag(w http.ResponseWriter, r *http.Request) {
 func (h *FlagHandler) publishExposureEvent(ctx context.Context, tenantID uuid.UUID, result *flags.EvaluationResult, subjectID string) {
 	// Create exposure event payload
 	exposurePayload := map[string]interface{}{
-		"flag_key":    result.FlagKey,
-		"subject_id":  subjectID,
-		"enabled":     result.Enabled,
-		"value":       result.Value,
-		"bucket":      result.Bucket,
-		"timestamp":   time.Now().UTC().Format(time.RFC3339),
+		"flag_key":   result.FlagKey,
+		"subject_id": subjectID,
+		"enabled":    result.Enabled,
+		"value":      result.Value,
+		"bucket":     result.Bucket,
+		"timestamp":  time.Now().UTC().Format(time.RFC3339),
 	}
 
 	// Add experiment information if present
@@ -170,7 +170,7 @@ func (h *FlagHandler) publishExposureEvent(ctx context.Context, tenantID uuid.UU
 	event := &flags.OutboxEvent{
 		ID:        uuid.New(),
 		TenantID:  tenantID,
-		EventType: "flag_exposure",
+		Topic:     "flag_exposure",
 		Payload:   json.RawMessage(payloadBytes),
 		CreatedAt: time.Now(),
 	}
@@ -178,7 +178,7 @@ func (h *FlagHandler) publishExposureEvent(ctx context.Context, tenantID uuid.UU
 	// Add event to outbox (with timeout)
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	
+
 	_ = h.outboxRepo.AddEvent(ctx, event)
 	// In production, you'd want to log errors here
 }
@@ -187,7 +187,7 @@ func (h *FlagHandler) publishExposureEvent(ctx context.Context, tenantID uuid.UU
 func (h *FlagHandler) writeJSONResponse(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	
+
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		// If we can't encode the response, write a simple error
 		w.WriteHeader(http.StatusInternalServerError)
@@ -287,18 +287,18 @@ func (h *FlagHandler) TrackConversion(w http.ResponseWriter, r *http.Request) {
 func (h *FlagHandler) publishConversionEvent(ctx context.Context, tenantID uuid.UUID, conversionID uuid.UUID, req *ConversionRequest) {
 	// Create conversion event payload
 	conversionPayload := map[string]interface{}{
-		"conversion_id":   conversionID.String(),
-		"experiment_key":  req.ExperimentKey,
-		"subject_id":      req.SubjectID,
-		"conversion_key":  req.ConversionKey,
-		"timestamp":       time.Now().UTC().Format(time.RFC3339),
+		"conversion_id":  conversionID.String(),
+		"experiment_key": req.ExperimentKey,
+		"subject_id":     req.SubjectID,
+		"conversion_key": req.ConversionKey,
+		"timestamp":      time.Now().UTC().Format(time.RFC3339),
 	}
 
 	// Add optional fields if present
 	if req.Value != nil {
 		conversionPayload["value"] = *req.Value
 	}
-	if req.Properties != nil && len(req.Properties) > 0 {
+	if len(req.Properties) > 0 {
 		conversionPayload["properties"] = req.Properties
 	}
 
@@ -313,7 +313,7 @@ func (h *FlagHandler) publishConversionEvent(ctx context.Context, tenantID uuid.
 	event := &flags.OutboxEvent{
 		ID:        uuid.New(),
 		TenantID:  tenantID,
-		EventType: "experiment_conversion",
+		Topic:     "experiment_conversion",
 		Payload:   json.RawMessage(payloadBytes),
 		CreatedAt: time.Now(),
 	}
@@ -321,7 +321,7 @@ func (h *FlagHandler) publishConversionEvent(ctx context.Context, tenantID uuid.
 	// Add event to outbox (with timeout)
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	
+
 	_ = h.outboxRepo.AddEvent(ctx, event)
 	// In production, you'd want to log errors here
 }
@@ -334,6 +334,6 @@ func (h *FlagHandler) writeErrorResponse(w http.ResponseWriter, status int, code
 			Message: message,
 		},
 	}
-	
+
 	h.writeJSONResponse(w, status, response)
 }

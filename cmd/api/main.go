@@ -26,9 +26,19 @@ func main() {
 	experimentRepo := &mockExperimentRepo{}
 	outboxRepo := &mockOutboxRepo{}
 
+	// Initialize caching layer
+	cacheConfig := flags.DefaultCacheConfig()
+	cacheManager := flags.NewCacheManager(flagRepo, cacheConfig)
+
+	// Start cache cleanup routine
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cacheManager.StartCleanupRoutine(ctx)
+	defer cacheManager.Stop()
+
 	// Initialize core services
 	experimentEngine := flags.NewExperimentEngine(experimentRepo, assignmentRepo)
-	evaluator := flags.NewFlagEvaluator(flagRepo, assignmentRepo, experimentRepo, experimentEngine)
+	evaluator := flags.NewFlagEvaluator(cacheManager.GetRepository(), assignmentRepo, experimentRepo, experimentEngine)
 
 	// Initialize middleware dependencies (mocked for now)
 	rateLimitConfig := middleware.DefaultRateLimitConfig()
@@ -65,10 +75,10 @@ func main() {
 	fmt.Println("Shutting down server...")
 
 	// Give outstanding requests 30 seconds to complete
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
 
-	if err := server.Shutdown(ctx); err != nil {
+	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Printf("Server forced to shutdown: %v", err)
 	}
 
@@ -200,7 +210,7 @@ func (m *mockExperimentRepo) CreateExperimentVariant(ctx context.Context, varian
 type mockOutboxRepo struct{}
 
 func (m *mockOutboxRepo) AddEvent(ctx context.Context, event *flags.OutboxEvent) error {
-	fmt.Printf("Mock: Adding outbox event: %s\n", event.EventType)
+	fmt.Printf("Mock: Adding outbox event: %s\n", event.Topic)
 	return nil
 }
 
