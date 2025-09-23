@@ -1,0 +1,59 @@
+package cli
+
+import (
+    "context"
+    "encoding/json"
+    "os"
+
+    "github.com/spf13/cobra"
+)
+
+var (
+    databaseURL string
+    outputJSON  bool
+)
+
+// rootCmd represents the base command when called without any subcommands
+var rootCmd = &cobra.Command{
+    Use:   "routepilot",
+    Short: "RoutePilot CLI",
+    Long: `RoutePilot CLI manages tenants, feature flags, experiments, and API keys
+for the RoutePilot feature flag service.
+
+This tool provides administrative capabilities for bootstrapping and
+configuring the service without a web interface.`,
+}
+
+// Execute adds all child commands to the root command and sets flags appropriately.
+// This is called by main.main(). It only needs to happen once to the rootCmd.
+func Execute(ctx context.Context) error {
+	return rootCmd.ExecuteContext(ctx)
+}
+
+func init() {
+    cobra.OnInitialize(initConfig)
+
+    // Global flags
+    rootCmd.PersistentFlags().StringVar(&databaseURL, "database-url", "", "PostgreSQL DSN; or set PG_DSN/DATABASE_URL")
+    rootCmd.MarkPersistentFlagRequired("database-url")
+    rootCmd.PersistentFlags().BoolVar(&outputJSON, "json", false, "Output JSON for machine-readable results")
+}
+
+// initConfig reads in config file and ENV variables if set.
+func initConfig() {
+    // If database URL is not provided via flag, try environment variable
+    if databaseURL == "" {
+        // Prefer PG_DSN (per plan), fallback to DATABASE_URL
+        if envURL := os.Getenv("PG_DSN"); envURL != "" {
+            databaseURL = envURL
+        } else if envURL := os.Getenv("DATABASE_URL"); envURL != "" {
+            databaseURL = envURL
+        }
+    }
+}
+
+func printJSON(v interface{}) error {
+    enc := json.NewEncoder(os.Stdout)
+    enc.SetIndent("", "  ")
+    return enc.Encode(v)
+}
